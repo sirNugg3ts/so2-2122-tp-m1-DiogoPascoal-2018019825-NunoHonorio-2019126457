@@ -116,9 +116,9 @@ DWORD WINAPI ThreadComsPipes(LPVOID param){
             PIPE_TYPE_MESSAGE |      // message-type pipe 
             PIPE_READMODE_MESSAGE |  // message-read mode 
             PIPE_WAIT,               // blocking mode 
-            2,               // number of instances 
-            BUFSIZE * sizeof(TCHAR),   // output buffer size 
-            BUFSIZE * sizeof(TCHAR),   // input buffer size 
+            MAX_CLIENTS,               // number of instances 
+            sizeof(infoServidor),   // output buffer size 
+            sizeof(infoCliente),   // input buffer size 
             PIPE_TIMEOUT,            // client time-out 
             NULL);                   // default security attributes
 
@@ -205,6 +205,8 @@ DWORD WINAPI ThreadComsPipes(LPVOID param){
             }
         }
 
+        infoCliente buffer;
+        infoServidor bufferEnvio;
 
         //O estado do pipe decide o que fazer aseguir
         switch (Pipes[i].dwState)
@@ -215,11 +217,12 @@ DWORD WINAPI ThreadComsPipes(LPVOID param){
             // and is ready to read a request from the client. 
 
             case READING_STATE:
+                
                 //_tprintf(TEXT("\n estou a ler algo no pipe"));
                 fSuccess = ReadFile(
                     Pipes[i].hPipe,
-                    &Pipes[i].chRequest,
-                    BUFSIZE * sizeof(TCHAR),
+                    &buffer,
+                    sizeof(infoCliente),
                     &Pipes[i].cbRead,
                     &Pipes[i].overlap);
 
@@ -261,13 +264,13 @@ DWORD WINAPI ThreadComsPipes(LPVOID param){
             // Get the reply data and write it to the client. 
 
             case WRITING_STATE:
-                StringCchCopy(Pipes[i].chReply, BUFSIZE, TEXT("TESTE"));
-                Pipes[i].cbToWrite = (lstrlen(Pipes[i].chReply) + 1) * sizeof(TCHAR);
+                // TODO: bufferEnvio.infoTab = *Insert tabuleiro here*
+               
 
                 fSuccess = WriteFile(
                     Pipes[i].hPipe,
-                    Pipes[i].chReply,
-                    Pipes[i].cbToWrite,
+                    &bufferEnvio,
+                    sizeof(bufferEnvio),
                     &cbRet,
                     &Pipes[i].overlap);
 

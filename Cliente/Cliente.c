@@ -55,6 +55,8 @@ TCHAR szProgName[] = TEXT("Base");
 //   nCmdShow:  Parâmetro que especifica o modo de exibição da janela (usado em  
 //        	   ShowWindow()
 
+
+
 int WINAPI WinMain(HINSTANCE hInst, // instancia atual app
     HINSTANCE hPrevInst,//
     LPSTR lpCmdLine, int nCmdShow) {
@@ -187,6 +189,7 @@ int WINAPI WinMain(HINSTANCE hInst, // instancia atual app
 void addMenu(HWND hWnd);
 void addControls(HWND hWnd);
 void addGameControls(HWND hWnd);
+DWORD WINAPI ThreadComsServidor(LPVOID param);
 int oX(int x);
 int oY(int y);
 HWND hName, hMenu, hButton1, hButton2, hwCano;
@@ -225,9 +228,34 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     int updateQueue = 0;
     infoServidor server;
     infoCliente cliente;
+
+    //Thread Pipe stuff
+    HANDLE ThreadPipe;
+    DADOS_THREAD_COMS dadosThread;
+    dadosThread.terminar = FALSE;
+    dadosThread.infoCliente = &cliente;
+    dadosThread.infoServidor = &server;
+
+
     switch (messg) {
     case WM_CREATE:
     {
+
+        //Iniciar comunicação com servidor
+        ThreadPipe = CreateThread(
+        NULL,
+        0,
+        ThreadComsServidor,
+        &dadosThread,
+        0,
+        NULL);
+
+        if (ThreadPipe == NULL) {
+            _tprintf(TEXT("\nErro ao iniciar thread para comunicar com o servidor"));
+            return 1;
+        }
+
+
         
         //if (!initCreate(hWnd, &hPipe, &hThread, lpvMessage, &dwMode, &cbToWrite, &cbWritten, &td)) {
         //    MessageBox(hWnd, _T("ERRO NO INITCREATE"), _T("Sair"), MB_ICONQUESTION | MB_YESNO | MB_HELP);
@@ -487,4 +515,139 @@ void addGameControls(HWND hWnd) {
 
 
 
+DWORD WINAPI ThreadComsServidor(LPVOID param) {
+    DADOS_THREAD_COMS* dados = (DADOS_THREAD_COMS*)param;
+  
+    NAMEDPIPE_STRUCT Pipe;
 
+    //
+    LPTSTR lpvMessage = TEXT("Default message from client.");
+
+
+    while (1) {
+        Pipe.hPipe = CreateFile(NOME_PIPE,   // pipe name 
+            GENERIC_READ |  // read and write access 
+            GENERIC_WRITE,
+            0,              // no sharing 
+            NULL,           // default security attributes
+            OPEN_EXISTING,  // opens existing pipe 
+            FILE_FLAG_OVERLAPPED,              // default attributes 
+            NULL);          // no template file );
+        // Break if the pipe handle is valid. 
+
+        if (Pipe.hPipe != INVALID_HANDLE_VALUE)
+            break;
+
+
+        // Exit if an error other than ERROR_PIPE_BUSY occurs. 
+
+        if (GetLastError() != ERROR_PIPE_BUSY)
+        {
+            _tprintf(TEXT("Could not open pipe. GLE=%d\n"), GetLastError());
+            return -1;
+        }
+
+        // All pipe instances are busy, so wait for 20 seconds. 
+
+        if (!WaitNamedPipe(NOME_PIPE, 20000))
+        {
+            printf("Could not open pipe: 20 second wait timed out.");
+            return -1;
+        }
+    }
+
+    //limpar estrutura overlap
+    ZeroMemory(
+        &Pipe.overlap,
+        sizeof(Pipe.overlap)
+    );
+
+    Pipe.overlap.hEvent = CreateEvent(NULL, TRUE, TRUE, NULL);
+
+    if (Pipe.overlap.hEvent == NULL) {
+        _tprintf(TEXT("\nNão foi possível criar o evento overlap"));
+
+        CloseHandle(Pipe.hPipe);
+        return -1;
+    }
+
+
+
+    //Primeira mensagem para o servidor
+
+    //TODO - PREENCHER ESTRUTURA
+
+    DWORD cbToWrite = (lstrlen(lpvMessage) + 1) * sizeof(TCHAR);
+    _tprintf(TEXT("Sending %d byte message: \"%s\"\n"), cbToWrite, lpvMessage);
+    DWORD nBytes,cbWritten;
+
+  
+    
+
+    DWORD fSuccess = WriteFile(
+        Pipe.hPipe,                  // pipe handle 
+        dados->infoCliente,             // message 
+        sizeof(infoCliente),              // message length 
+        &cbWritten,             // bytes written 
+        &Pipe.overlap);                  // overlapped 
+    
+
+    DWORD ret2 = GetOverlappedResultEx(
+        Pipe.hPipe,
+        &Pipe.overlap,
+        &nBytes,
+        INFINITE,
+        TRUE
+    );
+
+    if (!fSuccess)
+    {
+        _tprintf(TEXT("WriteFile to pipe failed. GLE=%d\n"), GetLastError());
+        return -1;
+    }
+
+    _tprintf(TEXT("\nMessage sent to server, receiving reply as follows:\n"));
+
+    // Read from the pipe. 
+
+    
+
+    fSuccess = ReadFile(
+        Pipe.hPipe,    // pipe handle 
+        &dados->infoServidor,    // buffer to receive reply 
+        sizeof(infoServidor),  // size of buffer 
+        &nBytes,  // number of bytes read 
+        &Pipe.overlap);    // not overlapped 
+
+    ret2 = GetOverlappedResultEx(
+        Pipe.hPipe,
+        &Pipe.overlap,
+        &nBytes,
+        INFINITE,
+        TRUE
+    );
+
+    if (!fSuccess)
+    {
+        
+        //TODO- DO SOMETHING WITH INFORMATION
+
+    }
+    else {
+        _tprintf(TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError());
+        return -1;
+    }
+
+    _tprintf(TEXT("\n<End of message, press ENTER to terminate connection and exit>"));
+    _getch();
+
+    CloseHandle(Pipe.hPipe);
+
+
+
+    Sleep(200);
+    return 0;
+
+
+
+}
