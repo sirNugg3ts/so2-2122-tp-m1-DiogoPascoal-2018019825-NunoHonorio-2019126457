@@ -420,7 +420,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                            GetObject(hCano6, sizeof(bmp), &bmp);
                            SelectObject(bmpDC, hCano6);
                        }
-
+                       BitBlt(hdc, (26*i)+15, (26*j) + 65, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
                    }
                }
         }
