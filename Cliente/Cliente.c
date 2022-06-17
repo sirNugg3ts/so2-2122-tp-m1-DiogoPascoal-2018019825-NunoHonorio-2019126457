@@ -226,20 +226,25 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     static TCHAR queue[6];
     static int next = 0;
     int updateQueue = 0;
-    infoServidor server;
-    infoCliente cliente;
+    Tabuleiro tab;
+ 
+    //static infoServidor server;
+    static infoCliente cliente;
+   
 
     //Thread Pipe stuff
     HANDLE ThreadPipe;
     DADOS_THREAD_COMS dadosThread;
-    dadosThread.terminar = FALSE;
-    dadosThread.infoCliente = &cliente;
-    dadosThread.infoServidor = &server;
 
 
-    switch (messg) {
+    switch (messg) { 
     case WM_CREATE:
     {
+        dadosThread.terminar = FALSE;
+        dadosThread.infoCliente = &cliente;
+        dadosThread.infoServidor = &server;
+        
+        //dadosThread.tab = &tab;
 
         //Iniciar comunicação com servidor
         ThreadPipe = CreateThread(
@@ -315,7 +320,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     {
         int xParam = GET_X_LPARAM(lParam); // (26*tam)+15 -> max || 15-> min
         int yParam = GET_Y_LPARAM(lParam); // (26*tam)+65 -> max || 65 -> min;
-        if (xParam >= 15 && xParam <= (26 * server.infoTab.tam) + 65 || yParam >= 65 && yParam <= (26 * server.infoTab.tam) + 15) {
+        if (xParam >= 15 && xParam <= (26 * dadosThread.tab.tam) + 65 || yParam >= 65 && yParam <= (26 * server.infoTab.tam) + 15) {
             xBitmap = oX(xParam) * 26 + 19;
             yBitmap = oY(yParam) * 26 + 70;
         
@@ -572,7 +577,6 @@ DWORD WINAPI ThreadComsServidor(LPVOID param) {
     }
 
 
-
     //Primeira mensagem para o servidor
 
     //TODO - PREENCHER ESTRUTURA
@@ -580,6 +584,9 @@ DWORD WINAPI ThreadComsServidor(LPVOID param) {
     DWORD cbToWrite = (lstrlen(lpvMessage) + 1) * sizeof(TCHAR);
     _tprintf(TEXT("Sending %d byte message: \"%s\"\n"), cbToWrite, lpvMessage);
     DWORD nBytes,cbWritten;
+
+    //Mensagem de login
+    _tcscpy_s(dados->infoCliente->comando, _tcslen(dados->infoCliente->comando) * sizeof(TCHAR), TEXT("REQ TAB"));
 
   
     

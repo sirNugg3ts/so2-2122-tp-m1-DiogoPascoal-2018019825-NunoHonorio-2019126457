@@ -24,6 +24,8 @@
 NAMEDPIPE_STRUCT Pipes[2];
 
 
+void showmap(Tabuleiro* tab);
+
 BOOL ConnectToNewClient(HANDLE hPipe, LPOVERLAPPED lpo)
 {
     BOOL fConnected, fPendingIO = FALSE;
@@ -265,6 +267,10 @@ DWORD WINAPI ThreadComsPipes(LPVOID param){
 
             case WRITING_STATE:
                 // TODO: bufferEnvio.infoTab = *Insert tabuleiro here*
+                bufferEnvio.infoTab = *(dados->tab);
+
+                //DEBUG
+                showmap(&bufferEnvio.infoTab);
                
 
                 fSuccess = WriteFile(
@@ -800,6 +806,7 @@ int _tmain(int argc, TCHAR* argv[])
     HANDLE hPipe;
     DadosThreads dados;
     BOOL  primeiroProcesso = FALSE;
+    Tabuleiro tab;
 
 #ifdef UNICODE
     _setmode(_fileno(stdin), _O_WTEXT);
@@ -889,7 +896,7 @@ int _tmain(int argc, TCHAR* argv[])
 
     //mapeamos o bloco de memoria para o espaco de enderaçamento do nosso processo
     dados.memPar = (MemoriaCircular*)MapViewOfFile(hFileMap, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MemoriaCircular));
-
+   
 
     if (dados.memPar == NULL) {
         _tprintf(TEXT("Erro no MapViewOfFile\n"));
@@ -898,7 +905,6 @@ int _tmain(int argc, TCHAR* argv[])
 
    
    
-    dadosThreadCliente.terminar = 0;
 
     /* FUNÇÕES DOS CANOS --- FUNCIONAL
     queueCanos(&dados.memPar->tabMem, 2);
@@ -920,8 +926,11 @@ int _tmain(int argc, TCHAR* argv[])
     funcaodebug(&dados.memPar->tabMem, 1);
     showmap(&dados.memPar->tabMem);
     TCHAR comando[100];
+    tab = (dados.memPar->tabMem);
 
-   
+
+    dadosThreadCliente.terminar = 0;
+    dadosThreadCliente.tab = &tab;
     
 
     Threads[0] = CreateThread(NULL, 0, ThreadComandos, &dados, CREATE_SUSPENDED, NULL);

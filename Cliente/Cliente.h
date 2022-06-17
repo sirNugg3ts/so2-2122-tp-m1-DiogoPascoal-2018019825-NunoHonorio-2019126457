@@ -6,6 +6,20 @@
 #include "resource.h"
 #define NOME_PIPE TEXT("\\\\.\\pipe\\TPSO2122_SERVER_CLIENTE")
 
+//Tabuleiro do jogo
+typedef struct {
+    int tam;
+    TCHAR tab[20][20];
+    int startCel;
+    int destCel;
+    int agua;
+    int aguay;
+    int aguax;
+    int tempAgua;
+    TCHAR queue[6];
+    int modoqueue;
+}Tabuleiro;
+
 //Estruturas para coms
 //Servidor -> Cliente  AKA Pedido
 typedef struct {
@@ -31,6 +45,7 @@ typedef struct {
     BOOL terminar;
     infoServidor* infoServidor;
     infoCliente* infoCliente;
+    Tabuleiro* tab;
     
 }DADOS_THREAD_COMS;
 
@@ -50,19 +65,7 @@ typedef struct NAMEDPIPE_STRUCT {
 }NAMEDPIPE_STRUCT;
 
 
-//Tabuleiro do jogo
-typedef struct {
-    int tam;
-    TCHAR tab[20][20];
-    int startCel;
-    int destCel;
-    int agua;
-    int aguay;
-    int aguax;
-    int tempAgua;
-    TCHAR queue[6];
-    int modoqueue;
-}Tabuleiro;
+
 
 
 

@@ -95,6 +95,7 @@ typedef struct {
 
 //Informação para funcionamento da thread pipes 
 typedef struct {
+    Tabuleiro* tab;
    
     int terminar; // 1 para sair, 0 em caso contrário
    
