@@ -273,6 +273,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     static infoServidor server;
     static infoCliente cliente;
     DWORD nBytes;
+    static BOOL jogada = FALSE;
     switch (messg) {
     case WM_CREATE:
     {
@@ -412,11 +413,24 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     case WM_LBUTTONDOWN: // <-BOTAO ESQUERDO, BOTADO DIREITO -> WM_RBUTTONDOWN
     {
         if (start) {
-            int xParam = GET_X_LPARAM(lParam); // (26*tam)+15 -> max || 15-> min
-            int yParam = GET_Y_LPARAM(lParam); // (26*tam)+65 -> max || 65 -> min;
-            if (xParam >= 15 && xParam <= (26 * server.infoTab.tam) + 65 && yParam >= 65 && yParam <= (26 * server.infoTab.tam) + 15) {
-                xBitmap = oX(xParam) * 26 + 19;
-                yBitmap = oY(yParam) * 26 + 70;
+            int xParam = GET_X_LPARAM(lParam); // (26*tam)+15 -> max || 15-> min   -------- 15
+            int yParam = GET_Y_LPARAM(lParam); // (26*tam)+65 -> max || 65 -> min; -------
+            int x = oX(xParam); // 
+            int y = (oY(yParam)); // 
+            
+            if (xParam > 15 && xParam < (26 * server.infoTab.tam) + 15 && yParam > 65 && yParam < (26 * server.infoTab.tam) + 65 && server.infoTab.tab[y][x]!=_T('━')
+                && server.infoTab.tab[y][x] != _T('┬')
+                && server.infoTab.tab[y][x] != _T('┃')
+                && server.infoTab.tab[y][x] != _T('┏')
+                && server.infoTab.tab[y][x] != _T('┓')
+                && server.infoTab.tab[y][x] != _T('┛')
+                && server.infoTab.tab[y][x] != _T('┗')
+                && server.infoTab.tab[y][x] != _T('┴')
+                && server.infoTab.tab[y][x] != _T('╩')
+                ) {
+               
+                xBitmap =  x * 26 + 19;
+                yBitmap =  y * 26 + 70;
                 //CANOS SEM AGUA
                 hCano2 = (HBITMAP)LoadImage(NULL, _T("6.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
                 hCano3 = (HBITMAP)LoadImage(NULL, _T("2.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
@@ -493,6 +507,39 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
         SetTextColor(hdc, RGB(0, 0, 0));
         SetBkMode(hdc, TRANSPARENT);
         if (aux == 1) {
+
+            fSuccess = WriteFile(
+                hPipe,                  // pipe handle 
+                &cliente,             // message 
+                sizeof(infoCliente),              // message length 
+                &nBytes,             // bytes written 
+                NULL);                  // not overlapped 
+
+            if (!fSuccess)
+            {
+                MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
+                return -1;
+            }
+
+            do
+            {
+                fSuccess = ReadFile(
+                    hPipe,    // pipe handle 
+                    &server,    // buffer to receive reply 
+                    sizeof(infoServidor),  // size of buffer 
+                    &nBytes,  // number of bytes read 
+                    NULL);    // not overlapped 
+
+                if (!fSuccess && GetLastError() != ERROR_MORE_DATA)
+                    break;
+
+            } while (!fSuccess);  // repeat loop if ERROR_MORE_DATA 
+
+            if (!fSuccess)
+            {
+                MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
+                return -1;
+            }
            
             int i = 0, j;
             int Lx1 = 15, Lx2 = 41;
