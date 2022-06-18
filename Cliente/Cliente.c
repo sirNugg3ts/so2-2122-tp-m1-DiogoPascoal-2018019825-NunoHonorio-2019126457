@@ -310,6 +310,44 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                 //addGameControls(hWnd);
                 aux = 1;
                 //TODO: Iniciar modo individual
+                cliente.modojogo = modojogo;
+                fSuccess = FALSE;
+                fSuccess = WriteFile(
+                    hPipe,                  // pipe handle 
+                    &cliente,             // message 
+                    sizeof(infoCliente),              // message length 
+                    &nBytes,             // bytes written 
+                    NULL);                  // not overlapped 
+
+                if (!fSuccess)
+                {
+                    MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
+                    return -1;
+                }
+                MessageBox(hWnd, TEXT("Ligação com sucesso \n"), _T("Erro"), MB_OK);
+
+                do
+                {
+                    fSuccess = ReadFile(
+                        hPipe,    // pipe handle 
+                        &server,    // buffer to receive reply 
+                        sizeof(infoServidor),  // size of buffer 
+                        &nBytes,  // number of bytes read 
+                        NULL);    // not overlapped 
+
+                    if (!fSuccess && GetLastError() != ERROR_MORE_DATA)
+                        break;
+
+                } while (!fSuccess);  // repeat loop if ERROR_MORE_DATA 
+
+                if (!fSuccess)
+                {
+                    MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
+                    return -1;
+                }
+                MessageBox(hWnd, TEXT("Tam mapa = %d\n"), server.infoTab.tam, _T("Aviso"), MB_OK);
+
+                //
                 InvalidateRect(hWnd, NULL, FALSE);
                 break;
             case BUTTON_MOD2:
@@ -322,6 +360,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                 DestroyWindow(hButton1);
                 DestroyWindow(hButton2);
                 //addGameControls(hWnd);
+                
                 aux = 1;
                 _tcscpy_s(cliente.nome, 256, playerName);
                 cliente.modojogo = modojogo;
@@ -338,7 +377,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                     MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
                     return -1;
                 }
-                MessageBox(hWnd, TEXT("COMIA A TUA PRIMA 2 \n"), _T("Erro"), MB_OK);
+                //MessageBox(hWnd, TEXT("COMIA A TUA PRIMA 2 \n"), _T("Erro"), MB_OK);
                 //Ler do servidor
                 do
                 {
@@ -430,12 +469,21 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
         }
         break;
     case WM_PAINT:
+
+
         hdc = BeginPaint(hWnd, &ps);
         GetClientRect(hWnd, &rect);
         FillRect(hdc, &rect, CreateSolidBrush(RGB(0, 96, 255)));
         SetTextColor(hdc, RGB(0, 0, 0));
         SetBkMode(hdc, TRANSPARENT);
         if (aux == 1) {
+            MessageBox(hWnd, TEXT("Tam mapa = %d\n"), server.infoTab.tam, _T("Aviso"), MB_OK);
+
+           
+            
+           
+            
+            // 
             //BitBlt(hdc, 0, 0, rect.right, rect.bottom, memDC, 0, 0, SRCCOPY);
             int i = 0, j;
             int Lx1 = 15, Lx2 = 41;
@@ -455,6 +503,8 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
             
            BitBlt(hdc, xBitmap, yBitmap, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
            
+           //pintar queue
+           BOOL existeCano = FALSE;
                for (int i = 0; i < 6; i++) {
                    if (queue[i] == _T('═')) {
                        GetObject(hCano1, sizeof(bmp), &bmp);
@@ -483,35 +533,51 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                    next = 50 * (i + 1);
                    BitBlt(hdc, 640, 100 + next, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
                }    
+
+            //pintar tabuleiro
                for (int i = 0; i < server.infoTab.tam; i++) {
                    for (int j = 0; j < server.infoTab.tam; j++) {
                        if (server.infoTab.tab[i][j] == _T('═')) {
+                           existeCano = TRUE;
                            GetObject(hCano1, sizeof(bmp), &bmp);
                            SelectObject(bmpDC, hCano1);
                        }
                        else if (server.infoTab.tab[i][j] == _T('║')) {
+                           existeCano = TRUE;
                            GetObject(hCano2, sizeof(bmp), &bmp);
                            SelectObject(bmpDC, hCano2);
                        }
                        else if (server.infoTab.tab[i][j] == _T('╔')) {
+                           existeCano = TRUE;
                            GetObject(hCano3, sizeof(bmp), &bmp);
                            SelectObject(bmpDC, hCano3);
                        }
                        else if (server.infoTab.tab[i][j] == _T('╗')) {
+                           existeCano = TRUE;
                            GetObject(hCano4, sizeof(bmp), &bmp);
                            SelectObject(bmpDC, hCano4);
                        }
                        else if (server.infoTab.tab[i][j] == _T('╝')) {
+                           existeCano = TRUE;
                            GetObject(hCano5, sizeof(bmp), &bmp);
                            SelectObject(bmpDC, hCano5);
                        }
                        else if (server.infoTab.tab[i][j] == _T('╚')) {
+                           existeCano = TRUE;
                            GetObject(hCano6, sizeof(bmp), &bmp);
                            SelectObject(bmpDC, hCano6);
                        }
+                       if (existeCano) {
+                           BitBlt(hdc, (26 * j) + 15, (26 * i) + 65, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
+                           existeCano = FALSE;
+                       }
+                       
                    }
                }
+
+
         }
+        EndPaint(hWnd, &ps);
         break;
     case WM_CHAR:
         c = (TCHAR)wParam;
