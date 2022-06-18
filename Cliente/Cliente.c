@@ -54,10 +54,9 @@ TCHAR szProgName[] = TEXT("Base");
 //              destinada a conter parâmetros para o programa 
 //   nCmdShow:  Parâmetro que especifica o modo de exibição da janela (usado em  
 //        	   ShowWindow()
-
-
-
-int WINAPI WinMain(HINSTANCE hInst, // instancia atual app
+static HANDLE hPipe;
+#define NOME_PIPE TEXT("\\\\.\\pipe\\TPSO2122_SERVER_CLIENTE")
+int WINAPI _tWinMain(HINSTANCE hInst, // instancia atual app
     HINSTANCE hPrevInst,//
     LPSTR lpCmdLine, int nCmdShow) {
     HWND hWnd;		// hWnd é o handler da janela, gerado mais abaixo por CreateWindow()
@@ -93,6 +92,52 @@ int WINAPI WinMain(HINSTANCE hInst, // instancia atual app
     wcApp.cbClsExtra = 0;				// Livre, para uso particular
     wcApp.cbWndExtra = 0;				// Livre, para uso particular
     wcApp.hbrBackground = CreateSolidBrush(RGB(255, 255, 255));
+    BOOL fSuccess=FALSE;
+    DWORD dwMode;
+    while (1)
+    {
+        hPipe = CreateFile(
+            NOME_PIPE,   // pipe name 
+            GENERIC_READ |  // read and write access 
+            GENERIC_WRITE,
+            0,              // no sharing 
+            NULL,           // default security attributes
+            OPEN_EXISTING,  // opens existing pipe 
+            0,              // default attributes 
+            NULL);          // no template file 
+
+      // Break if the pipe handle is valid. 
+        if (hPipe != INVALID_HANDLE_VALUE)
+            break;
+
+        // Exit if an error other than ERROR_PIPE_BUSY occurs. 
+
+        if (GetLastError() != ERROR_PIPE_BUSY)
+        {
+            _tprintf(TEXT("Could not open pipe. GLE=%d\n"), GetLastError());
+            return -1;
+        }
+
+        // All pipe instances are busy, so wait for 20 seconds. 
+
+        if (!WaitNamedPipe(NOME_PIPE, 20000))
+        {
+            _tprintf(TEXT("Could not open pipe: 20 second wait timed out."));
+            return -1;
+        }
+    }
+    dwMode = PIPE_READMODE_MESSAGE;
+    fSuccess = SetNamedPipeHandleState(
+        hPipe,    // pipe handle 
+        &dwMode,  // new pipe mode 
+        NULL,     // don't set maximum bytes 
+        NULL);    // don't set maximum time 
+    if (!fSuccess)
+    {
+        _tprintf(TEXT("SetNamedPipeHandleState failed. GLE=%d\n"), GetLastError());
+        return -1;
+    }
+
     // "hbrBackground" = handler para "brush" de pintura do fundo da janela. Devolvido por
     // "GetStockObject".Neste caso o fundo será branco
 
@@ -189,7 +234,6 @@ int WINAPI WinMain(HINSTANCE hInst, // instancia atual app
 void addMenu(HWND hWnd);
 void addControls(HWND hWnd);
 void addGameControls(HWND hWnd);
-DWORD WINAPI ThreadComsServidor(LPVOID param);
 int oX(int x);
 int oY(int y);
 HWND hName, hMenu, hButton1, hButton2, hwCano;
@@ -218,49 +262,19 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     HDC hdc;
     static HDC bmpDC;
     static HDC memDC = NULL;
-    static HANDLE hPipe, hThread;
     static TCHAR lpvMessage[256] = TEXT("Default message from client.");
-    static BOOL   fSuccess = FALSE;
+    static BOOL   fSuccess = FALSE, start = FALSE;
     static DWORD  cbRead, cbToWrite, cbWritten, dwMode;
     static TCHAR cbS[256];
     static TCHAR queue[6];
     static int next = 0;
     int updateQueue = 0;
-    Tabuleiro tab;
- 
-    //static infoServidor server;
+    static infoServidor server;
     static infoCliente cliente;
-   
-
-    //Thread Pipe stuff
-    HANDLE ThreadPipe;
-    DADOS_THREAD_COMS dadosThread;
-
-
-    switch (messg) { 
+    DWORD nBytes;
+    switch (messg) {
     case WM_CREATE:
     {
-        dadosThread.terminar = FALSE;
-        dadosThread.infoCliente = &cliente;
-        dadosThread.infoServidor = &server;
-        
-        //dadosThread.tab = &tab;
-
-        //Iniciar comunicação com servidor
-        ThreadPipe = CreateThread(
-        NULL,
-        0,
-        ThreadComsServidor,
-        &dadosThread,
-        0,
-        NULL);
-
-        if (ThreadPipe == NULL) {
-            _tprintf(TEXT("\nErro ao iniciar thread para comunicar com o servidor"));
-            return 1;
-        }
-
-
         
         //if (!initCreate(hWnd, &hPipe, &hThread, lpvMessage, &dwMode, &cbToWrite, &cbWritten, &td)) {
         //    MessageBox(hWnd, _T("ERRO NO INITCREATE"), _T("Sair"), MB_ICONQUESTION | MB_YESNO | MB_HELP);
@@ -302,15 +316,54 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                 modojogo = 2;
                 GetWindowText(hName, &playerName[0], 100);
                 //TODO: Iniciar modo competitivo
+               // MessageBox(hWnd, TEXT("COMIA A TUA PRIMA \n"), _T("Erro"), MB_OK);
                 DestroyWindow(hName);
                 DestroyWindow(hMenu);
                 DestroyWindow(hButton1);
                 DestroyWindow(hButton2);
                 //addGameControls(hWnd);
                 aux = 1;
+                _tcscpy_s(cliente.nome, 256, playerName);
+                cliente.modojogo = modojogo;
+                fSuccess = FALSE;
+                fSuccess = WriteFile(
+                    hPipe,                  // pipe handle 
+                    &cliente,             // message 
+                    sizeof(infoCliente),              // message length 
+                    &nBytes,             // bytes written 
+                    NULL);                  // not overlapped 
+
+                if (!fSuccess)
+                {
+                    MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
+                    return -1;
+                }
+                MessageBox(hWnd, TEXT("COMIA A TUA PRIMA 2 \n"), _T("Erro"), MB_OK);
+                //Ler do servidor
+                do
+                {
+                    fSuccess = ReadFile(
+                        hPipe,    // pipe handle 
+                        &server,    // buffer to receive reply 
+                        sizeof(infoServidor),  // size of buffer 
+                        &nBytes,  // number of bytes read 
+                        NULL);    // not overlapped 
+
+                    if (!fSuccess && GetLastError() != ERROR_MORE_DATA)
+                        break;
+
+                } while (!fSuccess);  // repeat loop if ERROR_MORE_DATA 
+
+                if (!fSuccess)
+                {
+                    MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
+                    return -1;
+                }
+                MessageBox(hWnd, TEXT("Tam mapa = %d\n"), server.infoTab.tam, _T("Aviso"), MB_OK);
+
                 //DrawText(hdc, &c, 1, &rect, DT_SINGLELINE | DT_NOCLIP);
-                
-                InvalidateRect(hWnd, NULL, FALSE); // requisita WM_PAINT 
+                start = TRUE;
+                InvalidateRect(hWnd, NULL, TRUE); // requisita WM_PAINT 
                 break;
           
         }
@@ -318,18 +371,19 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     }
     case WM_LBUTTONDOWN: // <-BOTAO ESQUERDO, BOTADO DIREITO -> WM_RBUTTONDOWN
     {
-        int xParam = GET_X_LPARAM(lParam); // (26*tam)+15 -> max || 15-> min
-        int yParam = GET_Y_LPARAM(lParam); // (26*tam)+65 -> max || 65 -> min;
-        if (xParam >= 15 && xParam <= (26 * dadosThread.tab.tam) + 65 || yParam >= 65 && yParam <= (26 * server.infoTab.tam) + 15) {
-            xBitmap = oX(xParam) * 26 + 19;
-            yBitmap = oY(yParam) * 26 + 70;
+        if (start) {
+            int xParam = GET_X_LPARAM(lParam); // (26*tam)+15 -> max || 15-> min
+            int yParam = GET_Y_LPARAM(lParam); // (26*tam)+65 -> max || 65 -> min;
+            if (xParam >= 15 && xParam <= (26 * server.infoTab.tam) + 65 || yParam >= 65 && yParam <= (26 * server.infoTab.tam) + 15) {
+                xBitmap = oX(xParam) * 26 + 19;
+                yBitmap = oY(yParam) * 26 + 70;
         
-            hCano2 = (HBITMAP)LoadImage(NULL, _T("6.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-            hCano3 = (HBITMAP)LoadImage(NULL, _T("2.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-            hCano4 = (HBITMAP)LoadImage(NULL, _T("1.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-            hCano5 = (HBITMAP)LoadImage(NULL, _T("3.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-            hCano6 = (HBITMAP)LoadImage(NULL, _T("4.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-            hCano1 = (HBITMAP)LoadImage(NULL, _T("5.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCano2 = (HBITMAP)LoadImage(NULL, _T("6.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCano3 = (HBITMAP)LoadImage(NULL, _T("2.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCano4 = (HBITMAP)LoadImage(NULL, _T("1.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCano5 = (HBITMAP)LoadImage(NULL, _T("3.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCano6 = (HBITMAP)LoadImage(NULL, _T("4.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCano1 = (HBITMAP)LoadImage(NULL, _T("5.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
            
             if (server.infoTab.queue[0] == _T('═')) {  
                 GetObject(hCano1, sizeof(bmp), &bmp);
@@ -355,8 +409,10 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                 GetObject(hCano6, sizeof(bmp), &bmp);
                 SelectObject(bmpDC, hCano6);
             }
-        InvalidateRect(hWnd, NULL, FALSE); // requisita WM_PAINT
+            InvalidateRect(hWnd, NULL,  TRUE); // requisita WM_PAINT
+           }
         }
+        
         
         break;
     }case WM_RBUTTONDOWN:
@@ -453,7 +509,6 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                            GetObject(hCano6, sizeof(bmp), &bmp);
                            SelectObject(bmpDC, hCano6);
                        }
-                       BitBlt(hdc, (26*i)+15, (26*j) + 65, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
                    }
                }
         }
@@ -467,8 +522,6 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
         break;
     case WM_DESTROY:    // Destruir a janela e terminar o programa 
                         // "PostQuitMessage(Exit Status)"
-       
-        break;
         PostQuitMessage(0);
         break;
 
@@ -520,141 +573,4 @@ void addGameControls(HWND hWnd) {
 
 
 
-DWORD WINAPI ThreadComsServidor(LPVOID param) {
-    DADOS_THREAD_COMS* dados = (DADOS_THREAD_COMS*)param;
-  
-    NAMEDPIPE_STRUCT Pipe;
 
-    //
-    LPTSTR lpvMessage = TEXT("Default message from client.");
-
-
-    while (1) {
-        Pipe.hPipe = CreateFile(NOME_PIPE,   // pipe name 
-            GENERIC_READ |  // read and write access 
-            GENERIC_WRITE,
-            0,              // no sharing 
-            NULL,           // default security attributes
-            OPEN_EXISTING,  // opens existing pipe 
-            FILE_FLAG_OVERLAPPED,              // default attributes 
-            NULL);          // no template file );
-        // Break if the pipe handle is valid. 
-
-        if (Pipe.hPipe != INVALID_HANDLE_VALUE)
-            break;
-
-
-        // Exit if an error other than ERROR_PIPE_BUSY occurs. 
-
-        if (GetLastError() != ERROR_PIPE_BUSY)
-        {
-            _tprintf(TEXT("Could not open pipe. GLE=%d\n"), GetLastError());
-            return -1;
-        }
-
-        // All pipe instances are busy, so wait for 20 seconds. 
-
-        if (!WaitNamedPipe(NOME_PIPE, 20000))
-        {
-            printf("Could not open pipe: 20 second wait timed out.");
-            return -1;
-        }
-    }
-
-    //limpar estrutura overlap
-    ZeroMemory(
-        &Pipe.overlap,
-        sizeof(Pipe.overlap)
-    );
-
-    Pipe.overlap.hEvent = CreateEvent(NULL, TRUE, TRUE, NULL);
-
-    if (Pipe.overlap.hEvent == NULL) {
-        _tprintf(TEXT("\nNão foi possível criar o evento overlap"));
-
-        CloseHandle(Pipe.hPipe);
-        return -1;
-    }
-
-
-    //Primeira mensagem para o servidor
-
-    //TODO - PREENCHER ESTRUTURA
-
-    DWORD cbToWrite = (lstrlen(lpvMessage) + 1) * sizeof(TCHAR);
-    _tprintf(TEXT("Sending %d byte message: \"%s\"\n"), cbToWrite, lpvMessage);
-    DWORD nBytes,cbWritten;
-
-    //Mensagem de login
-    _tcscpy_s(dados->infoCliente->comando, _tcslen(dados->infoCliente->comando) * sizeof(TCHAR), TEXT("REQ TAB"));
-
-  
-    
-
-    DWORD fSuccess = WriteFile(
-        Pipe.hPipe,                  // pipe handle 
-        dados->infoCliente,             // message 
-        sizeof(infoCliente),              // message length 
-        &cbWritten,             // bytes written 
-        &Pipe.overlap);                  // overlapped 
-    
-
-    DWORD ret2 = GetOverlappedResultEx(
-        Pipe.hPipe,
-        &Pipe.overlap,
-        &nBytes,
-        INFINITE,
-        TRUE
-    );
-
-    if (!fSuccess)
-    {
-        _tprintf(TEXT("WriteFile to pipe failed. GLE=%d\n"), GetLastError());
-        return -1;
-    }
-
-    _tprintf(TEXT("\nMessage sent to server, receiving reply as follows:\n"));
-
-    // Read from the pipe. 
-
-    
-
-    fSuccess = ReadFile(
-        Pipe.hPipe,    // pipe handle 
-        &dados->infoServidor,    // buffer to receive reply 
-        sizeof(infoServidor),  // size of buffer 
-        &nBytes,  // number of bytes read 
-        &Pipe.overlap);    // not overlapped 
-
-    ret2 = GetOverlappedResultEx(
-        Pipe.hPipe,
-        &Pipe.overlap,
-        &nBytes,
-        INFINITE,
-        TRUE
-    );
-
-    if (!fSuccess)
-    {
-        
-        //TODO- DO SOMETHING WITH INFORMATION
-
-    }
-    else {
-        _tprintf(TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError());
-        return -1;
-    }
-
-    _tprintf(TEXT("\n<End of message, press ENTER to terminate connection and exit>"));
-    _getch();
-
-    CloseHandle(Pipe.hPipe);
-
-
-
-    Sleep(200);
-    return 0;
-
-
-
-}

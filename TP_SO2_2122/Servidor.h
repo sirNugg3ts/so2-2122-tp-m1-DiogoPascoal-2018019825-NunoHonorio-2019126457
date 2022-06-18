@@ -26,34 +26,29 @@ typedef struct {
 //Servidor -> Cliente  AKA Pedido
 typedef struct {
     Tabuleiro infoTab;  // tabuleiro para enviar para o cliente
-    BOOL validada; //Se a jogada é valida
 }infoServidor;
 
 //Cliente -> Servidor AKA Resposta
 typedef struct {
-    TCHAR comando[256];
+    TCHAR nome[256];
+    int modojogo;
     int colunaJogada; // coluna carregada
     int linhaJogada; // linha carregada
 }infoCliente;
 
+typedef struct PipeInfo {
+    HANDLE hPipes;
+    OVERLAPPED overlap;
+    BOOL active;
+}PipeInfo;
 
 //Estruturas para pipes
 typedef struct NAMEDPIPE_STRUCT {
-    HANDLE hPipe; // handle do pipe
-
-    OVERLAPPED overlap;
-
-    BOOL active; //representa se a instancia do named pipe esta ou nao ativa, se ja tem um cliente ou nao
-    BOOL fPendingIO;
-    DWORD dwState;
-    TCHAR chRequest[256];
-    DWORD cbRead;
-    TCHAR chReply[256];
-    DWORD cbToWrite;
+     // handle do pipe
+    PipeInfo pipeInfo[2];
+    HANDLE hEvent[2];
+    HANDLE hMutex[2];
 }NAMEDPIPE_STRUCT;
-
-
-
 
 
 
@@ -87,6 +82,7 @@ typedef struct {
     HANDLE hSemLeitura; //handle para o semaforo que controla as leituras (controla quantas posicoes estao preenchidas)
     HANDLE hMutex;
     HANDLE hEventoMapa;
+    NAMEDPIPE_STRUCT pipes;
     int terminar; // 1 para sair, 0 em caso contrário
     int id;
 }DadosThreads;
@@ -95,7 +91,6 @@ typedef struct {
 
 //Informação para funcionamento da thread pipes 
 typedef struct {
-    Tabuleiro* tab;
    
     int terminar; // 1 para sair, 0 em caso contrário
    

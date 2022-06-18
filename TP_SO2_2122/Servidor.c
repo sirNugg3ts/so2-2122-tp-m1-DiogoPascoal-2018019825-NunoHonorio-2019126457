@@ -21,299 +21,35 @@
 #define WRITING_STATE 2 
 
 #define NOME_PIPE TEXT("\\\\.\\pipe\\TPSO2122_SERVER_CLIENTE")
-NAMEDPIPE_STRUCT Pipes[2];
 
-
-void showmap(Tabuleiro* tab);
-
-BOOL ConnectToNewClient(HANDLE hPipe, LPOVERLAPPED lpo)
-{
-    BOOL fConnected, fPendingIO = FALSE;
-
-    // Start an overlapped connection for this pipe instance. 
-    fConnected = ConnectNamedPipe(hPipe, lpo);
-
-    // Overlapped ConnectNamedPipe should return zero. 
-    if (fConnected)
-    {
-        printf("ConnectNamedPipe failed with %d.\n", GetLastError());
-        return 0;
-    }
-
-    switch (GetLastError())
-    {
-        // The overlapped connection in progress. 
-    case ERROR_IO_PENDING:
-        fPendingIO = TRUE;
-        break;
-
-        // Client is already connected, so signal an event. 
-
-    case ERROR_PIPE_CONNECTED:
-        if (SetEvent(lpo->hEvent))
-            break;
-
-        // If an error occurs during the connect operation... 
-    default:
-    {
-        printf("ConnectNamedPipe failed with %d.\n", GetLastError());
-        return 0;
-    }
-    }
-
-    return fPendingIO;
-}
-
-VOID DisconnectAndReconnect(DWORD i)
-{
-    // Disconnect the pipe instance. 
-
-    if (!DisconnectNamedPipe(Pipes[i].hPipe))
-    {
-        printf("DisconnectNamedPipe failed with %d.\n", GetLastError());
-    }
-
-    // Call a subroutine to connect to the new client. 
-
-    Pipes[i].fPendingIO = ConnectToNewClient(
-        Pipes[i].hPipe,
-        &Pipes[i].overlap);
-
-    Pipes[i].dwState = Pipes[i].fPendingIO ?
-        CONNECTING_STATE : // still connecting 
-        READING_STATE;     // ready to read 
-}
-
-
-DWORD WINAPI ThreadComsPipes(LPVOID param){
-    DadosThreadComsClientes* dados = (DadosThreadComsClientes*) param;
-
-    HANDLE hEvents[2]; //Handle para eventos overlap
-    BOOL fSuccess; //Para verificar se uma operação foi efetuada com sucesso
-
-    
-
-    DWORD i,dwWait, cbRet,dwErr;
-        DWORD nBytesTransferidos;
-
-    for(i = 0;i < MAX_CLIENTS;i++){
-
-        hEvents[i] = CreateEvent(
-        NULL,
-        TRUE,
-        TRUE,
-        NULL);
-
-        if (hEvents[i] == NULL)
-        {
-            _tprintf(_T("CreateEvent failed with %d.\n"), GetLastError());
-            return 0;
-        }
-
-        Pipes[i].overlap.hEvent = hEvents[i];
-        Pipes[i].hPipe = CreateNamedPipe(
-            NOME_PIPE,            // pipe name 
-            PIPE_ACCESS_DUPLEX |     // read/write access 
-            FILE_FLAG_OVERLAPPED,    // overlapped mode 
-            PIPE_TYPE_MESSAGE |      // message-type pipe 
-            PIPE_READMODE_MESSAGE |  // message-read mode 
-            PIPE_WAIT,               // blocking mode 
-            MAX_CLIENTS,               // number of instances 
-            sizeof(infoServidor),   // output buffer size 
-            sizeof(infoCliente),   // input buffer size 
-            PIPE_TIMEOUT,            // client time-out 
-            NULL);                   // default security attributes
-
-        if (Pipes[i].hPipe == INVALID_HANDLE_VALUE)
-        {
-            _tprintf(_T("CreateNamedPipe failed with %d.\n"), GetLastError());
-            return 0;
-        }
-
-         // Call the subroutine to connect to the new client
-
-        Pipes[i].fPendingIO = ConnectToNewClient(
-            Pipes[i].hPipe,
-            &Pipes[i].overlap);
-
-        Pipes[i].dwState = Pipes[i].fPendingIO ?
-            CONNECTING_STATE : // still connecting 
-            READING_STATE;     // ready to read 
-    }
-
-    while(!dados->terminar){
-        
-
-        dwWait = WaitForMultipleObjects(
-            MAX_CLIENTS,    // number of event objects 
-            hEvents,      // array of event objects 
-            FALSE,        // does not wait for all 
-            INFINITE);    // waits indefinitely 
-
-        i = dwWait - WAIT_OBJECT_0;  // determines which pipe 
-            if (i < 0 || i >(MAX_CLIENTS - 1))
-                {
-                    _tprintf(_T("Index out of range.\n"));
-                    return 0;
-                }
-
-        //verificar se há alguma operação por concluir
-        if(Pipes[i].fPendingIO){
-            fSuccess = GetOverlappedResult(
-                Pipes[i].hPipe, //Pipe a ler
-                &Pipes[i].overlap, //Estrutura overlapped
-                &nBytesTransferidos, //Bytes transferidos
-                FALSE); //Não esperar
-
-             switch(Pipes[i].dwState){
-
-            case CONNECTING_STATE: //pending connect
-                if(!fSuccess){
-                    _tprintf(TEXT("ERRO %d.\n"),GetLastError());
-                    return 0;
-                }
-
-                Pipes[i].dwState = READING_STATE;
-                break;
-
-            // Pending read operation 
-            case READING_STATE:
-                if (!fSuccess || cbRet == 0)
-                {
-                    DisconnectAndReconnect(i);
-                    continue;
-                }
-                Pipes[i].cbRead = cbRet;
-                Pipes[i].dwState = WRITING_STATE;
-                //_tprintf(TEXT("\n READING_STATE -> WRITING_STATE"));
-                break;
-
-            // Pending write operation 
-            case WRITING_STATE:
-                if (!fSuccess || cbRet != Pipes[i].cbToWrite)
-                {
-                    DisconnectAndReconnect(i);
-                    continue;
-                }
-                //_tprintf(TEXT("\n WRITING_STATE -> READING_STATE"));
-                Pipes[i].dwState = READING_STATE;
-                break;
-
-            default:
-                {
-                    _tprintf(_T("Invalid pipe state.\n"));
-                    return 0;
-                }
-            }
-        }
-
-        infoCliente buffer;
-        infoServidor bufferEnvio;
-
-        //O estado do pipe decide o que fazer aseguir
-        switch (Pipes[i].dwState)
-        {
-            
-            // READING_STATE: 
-            // The pipe instance is connected to the client 
-            // and is ready to read a request from the client. 
-
-            case READING_STATE:
-                
-                //_tprintf(TEXT("\n estou a ler algo no pipe"));
-                fSuccess = ReadFile(
-                    Pipes[i].hPipe,
-                    &buffer,
-                    sizeof(infoCliente),
-                    &Pipes[i].cbRead,
-                    &Pipes[i].overlap);
-
-          /*  DWORD nBytes;
-            DWORD ret2 = GetOverlappedResultEx(
-                Pipes[i].hPipe,
-                &Pipes[i].overlap,
+DWORD WINAPI ThreadServerClient(LPVOID param) {
+    DadosThreads* dados = (DadosThreads*)param;
+    BOOL fSuccess=FALSE;
+    DWORD nBytes;
+    infoCliente mensagemCliente;
+    infoServidor mensagemServidor;
+    while (1) {
+        _tprintf(TEXT("[THREAD] TOU DENTRO DA THREAD\n"));
+        do {
+            fSuccess = ReadFile(
+                dados->pipes.pipeInfo[0].hPipes,
+                &mensagemCliente,
+                sizeof(infoCliente),
                 &nBytes,
-                INFINITE,
-                TRUE
-            );*/
+                NULL);
+        } while (!fSuccess);
+        _tprintf(_T("Nome : %s e Modalidade: %d \n"),mensagemCliente.nome, mensagemCliente.modojogo);
+        mensagemServidor.infoTab = dados->memPar->tabMem;
 
-            // The read operation completed successfully. 
-           
-            if (fSuccess && Pipes[i].cbRead != 0)
-            {
-                Pipes[i].fPendingIO = FALSE;
-                Pipes[i].dwState = WRITING_STATE;
-                
-                continue;
-            }
-
-            // The read operation is still pending. 
-
-            dwErr = GetLastError();
-            if (!fSuccess && (dwErr == ERROR_IO_PENDING))
-            {
-                Pipes[i].fPendingIO = TRUE;
-                continue;
-            }
-
-            // An error occurred; disconnect from the client. 
-
-            DisconnectAndReconnect(i);
-            break;
-
-            // WRITING_STATE: 
-            // The request was successfully read from the client. 
-            // Get the reply data and write it to the client. 
-
-            case WRITING_STATE:
-                // TODO: bufferEnvio.infoTab = *Insert tabuleiro here*
-                bufferEnvio.infoTab = *(dados->tab);
-
-                //DEBUG
-                showmap(&bufferEnvio.infoTab);
-               
-
-                fSuccess = WriteFile(
-                    Pipes[i].hPipe,
-                    &bufferEnvio,
-                    sizeof(bufferEnvio),
-                    &cbRet,
-                    &Pipes[i].overlap);
-
-                // The write operation completed successfully. 
-
-                if (fSuccess && cbRet == Pipes[i].cbToWrite)
-                {
-
-                    Pipes[i].fPendingIO = FALSE;
-                    Pipes[i].dwState = READING_STATE;
-                    
-                    continue;
-                }
-
-                // The write operation is still pending. 
-
-                dwErr = GetLastError();
-                if (!fSuccess && (dwErr == ERROR_IO_PENDING))
-                {
-                    Pipes[i].fPendingIO = TRUE;
-                    continue;
-                }
-
-                // An error occurred; disconnect from the client. 
-
-                DisconnectAndReconnect(i);
-                break;
-
-        default:
-            {
-                _tprintf(_T("Invalid pipe state.\n"));
-                return 0;
-            }
+        if (!WriteFile(dados->pipes.pipeInfo[0].hPipes, &mensagemServidor, sizeof(infoCliente), &nBytes, NULL)) {
+            _tprintf(_T("Erro ao enviar mensagem para o Cliente!! \n"));
         }
+        else {
+            _tprintf(_T("Enviou mensagem para o Cliente com sucesso!! \n"));
+        }
+        
     }
-
-    return 0;
+    
 }
 
 int MoverAgua(Tabuleiro *tab) {
@@ -509,7 +245,7 @@ void WINAPI ThreadMoveAgua(LPVOID param) {
            // showmap(&dados->memPar->tabMem);
             ReleaseMutex(dados->hMutex);
 
-            Sleep(1 * 1000); //De momento move uma por segundo, atualizar para velocidade da agua na segunda meta
+            Sleep(10 * 1000); //De momento move uma por segundo, atualizar para velocidade da agua na segunda meta
         }
     }
     dados->memPar->win = resultado;
@@ -801,12 +537,11 @@ int _tmain(int argc, TCHAR* argv[])
     DadosThreadComsClientes dadosThreadCliente;
     DWORD tamMapa, waterspeed, velocidadeAgua;
     HANDLE hFileMap; //handle para o file map
-    HANDLE Threads[2];
+    HANDLE Threads[3];
     HANDLE ThreadPipes;
     HANDLE hPipe;
     DadosThreads dados;
     BOOL  primeiroProcesso = FALSE;
-    Tabuleiro tab;
 
 #ifdef UNICODE
     _setmode(_fileno(stdin), _O_WTEXT);
@@ -896,7 +631,7 @@ int _tmain(int argc, TCHAR* argv[])
 
     //mapeamos o bloco de memoria para o espaco de enderaçamento do nosso processo
     dados.memPar = (MemoriaCircular*)MapViewOfFile(hFileMap, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MemoriaCircular));
-   
+
 
     if (dados.memPar == NULL) {
         _tprintf(TEXT("Erro no MapViewOfFile\n"));
@@ -905,6 +640,7 @@ int _tmain(int argc, TCHAR* argv[])
 
    
    
+    dadosThreadCliente.terminar = 0;
 
     /* FUNÇÕES DOS CANOS --- FUNCIONAL
     queueCanos(&dados.memPar->tabMem, 2);
@@ -926,16 +662,62 @@ int _tmain(int argc, TCHAR* argv[])
     funcaodebug(&dados.memPar->tabMem, 1);
     showmap(&dados.memPar->tabMem);
     TCHAR comando[100];
-    tab = (dados.memPar->tabMem);
 
+    /// COMUNICAÇÃO SERVER CLIENTE
+    int i;
+    HANDLE hEventTemp;
+    int numClientes = 0;
+    TCHAR buf[256];
+    BOOL ret;
+    DWORD n;
+    DWORD offset, nBytes;
+    BOOL firstTime = FALSE;
 
-    dadosThreadCliente.terminar = 0;
-    dadosThreadCliente.tab = &tab;
+    for (i = 0; i < 2; i++) {
+        // aqui passamos a constante FILE_FLAG_OVERLAPPED para o named pipe aceitar comunicações assincronas
+        hPipe = CreateNamedPipe(NOME_PIPE, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+            PIPE_WAIT | PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE,
+            2,
+            256 * sizeof(TCHAR),
+            256 * sizeof(TCHAR),
+            1000,
+            NULL);
+
+        if (hPipe == INVALID_HANDLE_VALUE) {
+            _tprintf(TEXT("[ERRO] Criar Named Pipe! (CreateNamedPipe)"));
+            exit(-1);
+        }
+
+        // criar evento que vai ser associado à estrutura overlaped
+        // os eventos aqui tem de ter sempre reset manual e nao automático porque temos de delegar essas responsabilidades ao sistema operativo
+        hEventTemp = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+        if (hEventTemp == NULL) {
+            _tprintf(TEXT("[ERRO] ao criar evento\n"));
+            return -1;
+        }
+
+        dados.pipes.pipeInfo[i].hPipes = hPipe;
+        dados.pipes.pipeInfo[i].active = FALSE;
+        
+        //temos de garantir que a estrutura overlap está limpa
+        ZeroMemory(&dados.pipes.pipeInfo[i].overlap, sizeof(dados.pipes.pipeInfo[i].overlap));
+        //preenchemos agora o evento
+        dados.pipes.pipeInfo[i].overlap.hEvent = hEventTemp;
+        dados.pipes.hEvent[i] = hEventTemp;
+
+        _tprintf(TEXT("[ESCRITOR] Esperar ligação de um leitor... (ConnectNamedPipe)\n"));
+
+        // aqui passamos um ponteiro para a estrutura overlap
+        ConnectNamedPipe(hPipe, &dados.pipes.pipeInfo[i].overlap);
+    }
+
     
+
 
     Threads[0] = CreateThread(NULL, 0, ThreadComandos, &dados, CREATE_SUSPENDED, NULL);
     Threads[1] = CreateThread(NULL, 0, ThreadMoveAgua, &dados, CREATE_SUSPENDED, NULL);
-    ThreadPipes = CreateThread(NULL, 0, ThreadComsPipes, &dadosThreadCliente, 0, NULL);
+    //ThreadPipes = CreateThread(NULL, 0, ThreadComsPipes, &dadosThreadCliente, 0, NULL);
     //lancamos a thread
     if (Threads[0] != NULL && Threads[1] != NULL) {
         _tprintf(_T("--- Digite comecar para iniciar o jogo !! ---\n"));
@@ -944,25 +726,57 @@ int _tmain(int argc, TCHAR* argv[])
             if (_tcscmp(comando, _T("comecar\n")) == 0) {
                 ResumeThread(Threads[0]);
                 ResumeThread(Threads[1]);
+                while (numClientes < 2) {
+                    //permite estar bloqueado , à espera que 1 evento do array de enventos seja assinalado
+                    offset = WaitForMultipleObjects(2, dados.pipes.hEvent, FALSE, INFINITE);
+                    i = offset - WAIT_OBJECT_0; // devolve o indice da instancia do named pipe que está ativa, aqui sabemos em que indice o cliente se ligou
+
+                    // se é um indice válido ...
+                    if (i >= 0 && i < 2) {
+                        if (!firstTime) {
+                            _tprintf(TEXT("[SERVIDOR] ENTREI LA DENTRO\n"));
+                            Threads[2] = CreateThread(NULL, 0, ThreadServerClient, &dados, 0, NULL);
+                            firstTime = TRUE;
+                        }
+                        _tprintf(TEXT("[ESCRITOR] Leitor %d chegou\n"), i);
+
+                        if (GetOverlappedResult(dados.pipes.pipeInfo[i].hPipes, &dados.pipes.pipeInfo[i].overlap, &nBytes, FALSE)) {
+                            // se entrarmos aqui significa que a funcao correu tudo bem
+                            // fazemos reset do evento porque queremos que o WaitForMultipleObject desbloqueio com base noutro evento e nao neste
+                            ResetEvent(dados.pipes.hEvent[i]);
+
+                            //vamos esperar que o mutex esteja livre
+                            WaitForSingleObject(dados.hMutex, INFINITE);
+                            dados.pipes.pipeInfo[i].active = TRUE; // dizemos que esta instancia do named pipe está ativa
+                            ReleaseMutex(dados.hMutex);
+                            numClientes++;
+                        }
+                    }
+                }
                 break;
             }
             else {
                 _tprintf(_T("--- Comando inválido, digite comecar ---\n"));
             }
-        }
-        WaitForMultipleObjects(2, Threads, TRUE, INFINITE);
-    }
 
+        }
+
+        WaitForMultipleObjects(3, Threads, TRUE, INFINITE);
+    }
+    for (int i = 0; i < 2; i++) {
+        _tprintf(TEXT("[ESCRITOR] Desligar o pipe (DisconnectNamedPipe)\n"));
+        //desliga todas as instancias de named pipes
+        if (!DisconnectNamedPipe(dados.pipes.pipeInfo[i].hPipes)) {
+            _tprintf(TEXT("[ERRO] Desligar o pipe! (DisconnectNamedPipe)"));
+            exit(-1);
+        }
+    }
     UnmapViewOfFile(dados.memPar);
     CloseHandle(hFileMap);
     CloseHandle(dados.hSemEscrita);
     CloseHandle(dados.hSemLeitura);
     CloseHandle(dados.hEventoMapa);
     CloseHandle(dados.hMutex);
-
-
     return 0;
-
-
 }
 
