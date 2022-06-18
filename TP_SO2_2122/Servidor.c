@@ -41,7 +41,7 @@ DWORD WINAPI ThreadServerClient(LPVOID param) {
         _tprintf(_T("Nome : %s e Modalidade: %d \n"),mensagemCliente.nome, mensagemCliente.modojogo);
         mensagemServidor.infoTab = dados->memPar->tabMem;
 
-        if (!WriteFile(dados->pipes.pipeInfo[0].hPipes, &mensagemServidor, sizeof(infoCliente), &nBytes, NULL)) {
+        if (!WriteFile(dados->pipes.pipeInfo[0].hPipes, &mensagemServidor, sizeof(infoServidor), &nBytes, NULL)) {
             _tprintf(_T("Erro ao enviar mensagem para o Cliente!! \n"));
         }
         else {
@@ -296,6 +296,7 @@ void funcaodebug(Tabuleiro *tab, int i) {
 }
 void queueCanos(Tabuleiro* tab, int modo) {
     int random;
+    
     if (modo == 1) {
         tab->queue[0] = _T('═');
         tab->queue[1] = _T('║');
@@ -657,6 +658,7 @@ int _tmain(int argc, TCHAR* argv[])
     dados.memPar->tabMem.tempAgua = waterspeed;
     dados.memPar->tabMem.aguax = 3; // mudar para dinamico na segunda meta
     dados.memPar->tabMem.aguay = 0;
+    queueCanos(&dados.memPar->tabMem, 1);
     gamemap(&dados.memPar->tabMem);
     // StartandDest(&tab); para a 2a meta 
     funcaodebug(&dados.memPar->tabMem, 1);

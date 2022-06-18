@@ -242,8 +242,7 @@ PAINTSTRUCT ps;
 LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lParam) {
     
    
-    static HBITMAP hCanoA1, hCanoA2, hCanoA3, hCanoA4, hCanoA5, hCanoA6; // Canos agua de jogo
-    static HBITMAP hICano1, hICano2; // Canos iniciais
+    static HBITMAP hCanoA1, hCanoA2, hCanoA3, hCanoA4, hCanoA5, hCanoA6,hCanoAT,hCanoATI; // Canos agua de jogo
     int i;
     int modojogo;
     static  int numClicks = 1;
@@ -254,7 +253,9 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     static TCHAR c = '_';
     static PosChar posicoes[1000];
     TCHAR playerName[100];
-    static HBITMAP hCano1, hCano2, hCano3, hCano4, hCano5, hCano6; // Canos vazios de jogo
+    static HBITMAP hCano1, hCano2, hCano3, hCano4, hCano5, hCano6,hCanoT,hCantoTI; // Canos vazios de jogo
+    static HBITMAP hBloco; //posicao bloqueada de jogo
+
     //static ThreadData td;
     static int xBitmap;
     static int yBitmap;
@@ -413,17 +414,32 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
         if (start) {
             int xParam = GET_X_LPARAM(lParam); // (26*tam)+15 -> max || 15-> min
             int yParam = GET_Y_LPARAM(lParam); // (26*tam)+65 -> max || 65 -> min;
-            if (xParam >= 15 && xParam <= (26 * server.infoTab.tam) + 65 || yParam >= 65 && yParam <= (26 * server.infoTab.tam) + 15) {
+            if (xParam >= 15 && xParam <= (26 * server.infoTab.tam) + 65 && yParam >= 65 && yParam <= (26 * server.infoTab.tam) + 15) {
                 xBitmap = oX(xParam) * 26 + 19;
                 yBitmap = oY(yParam) * 26 + 70;
-        
+                //CANOS SEM AGUA
                 hCano2 = (HBITMAP)LoadImage(NULL, _T("6.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
                 hCano3 = (HBITMAP)LoadImage(NULL, _T("2.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
                 hCano4 = (HBITMAP)LoadImage(NULL, _T("1.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
                 hCano5 = (HBITMAP)LoadImage(NULL, _T("3.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
                 hCano6 = (HBITMAP)LoadImage(NULL, _T("4.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
                 hCano1 = (HBITMAP)LoadImage(NULL, _T("5.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-           
+                hCanoT = (HBITMAP)LoadImage(NULL, _T("T.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCantoTI = (HBITMAP)LoadImage(NULL, _T("Tinverso.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hBloco = (HBITMAP)LoadImage(NULL, _T("17.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+
+
+
+                //CANOS COM AGUA
+                hCanoA2 = (HBITMAP)LoadImage(NULL, _T("12.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCanoA3 = (HBITMAP)LoadImage(NULL, _T("8.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCanoA4 = (HBITMAP)LoadImage(NULL, _T("7.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCanoA5 = (HBITMAP)LoadImage(NULL, _T("9.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCanoA6 = (HBITMAP)LoadImage(NULL, _T("10.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCanoA1 = (HBITMAP)LoadImage(NULL, _T("11.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCanoAT = (HBITMAP)LoadImage(NULL, _T("TAgua.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                hCanoATI = (HBITMAP)LoadImage(NULL, _T("TInversoAgua.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+
             if (server.infoTab.queue[0] == _T('═')) {  
                 GetObject(hCano1, sizeof(bmp), &bmp);
                 SelectObject(bmpDC, hCano1);
@@ -477,14 +493,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
         SetTextColor(hdc, RGB(0, 0, 0));
         SetBkMode(hdc, TRANSPARENT);
         if (aux == 1) {
-            MessageBox(hWnd, TEXT("Tam mapa = %d\n"), server.infoTab.tam, _T("Aviso"), MB_OK);
-
            
-            
-           
-            
-            // 
-            //BitBlt(hdc, 0, 0, rect.right, rect.bottom, memDC, 0, 0, SRCCOPY);
             int i = 0, j;
             int Lx1 = 15, Lx2 = 41;
             int Cy1 = 65, Cy2 = 91;
@@ -505,39 +514,55 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
            
            //pintar queue
            BOOL existeCano = FALSE;
+           BOOL queueCano = FALSE;
                for (int i = 0; i < 6; i++) {
-                   if (queue[i] == _T('═')) {
+                   if (server.infoTab.queue[i] == _T('═')) {
                        GetObject(hCano1, sizeof(bmp), &bmp);
                        SelectObject(bmpDC, hCano1);
+                       queueCano = TRUE;
                    }
-                   else if (queue[i] == _T('║')) {
+                   else if (server.infoTab.queue[i] == _T('║')) {
                        GetObject(hCano2, sizeof(bmp), &bmp);
                        SelectObject(bmpDC, hCano2);
+                       queueCano = TRUE;
                    }
-                   else if (queue[i] == _T('╔')) {
+                   else if (server.infoTab.queue[i] == _T('╔')) {
                        GetObject(hCano3, sizeof(bmp), &bmp);
                        SelectObject(bmpDC, hCano3);
+                       queueCano = TRUE;
                    }
-                   else if (queue[i] == _T('╗')) {
+                   else if (server.infoTab.queue[i] == _T('╗')) {
                        GetObject(hCano4, sizeof(bmp), &bmp);
                        SelectObject(bmpDC, hCano4);
+                       queueCano = TRUE;
                    }
-                   else if (queue[i] == _T('╝')) {
+                   else if (server.infoTab.queue[i] == _T('╝')) {
                        GetObject(hCano5, sizeof(bmp), &bmp);
                        SelectObject(bmpDC, hCano5);
+                       queueCano = TRUE;
                    }
-                   else if (queue[i] == _T('╚')) {
+                   else if (server.infoTab.queue[i] == _T('╚')) {
                        GetObject(hCano6, sizeof(bmp), &bmp);
                        SelectObject(bmpDC, hCano6);
+                       queueCano = TRUE;
                    }
                    next = 50 * (i + 1);
-                   BitBlt(hdc, 640, 100 + next, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
+                   if(queueCano){
+                        BitBlt(hdc, 640, 100 + next, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
+                        queueCano = FALSE;
+                   }
+                    
                }    
 
             //pintar tabuleiro
                for (int i = 0; i < server.infoTab.tam; i++) {
                    for (int j = 0; j < server.infoTab.tam; j++) {
-                       if (server.infoTab.tab[i][j] == _T('═')) {
+                       if(server.infoTab.tab[i][j] == _T('╦')){
+                           existeCano = TRUE;
+                           GetObject(hCanoT, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hCanoT);
+                       }
+                       else if (server.infoTab.tab[i][j] == _T('═')) {
                            existeCano = TRUE;
                            GetObject(hCano1, sizeof(bmp), &bmp);
                            SelectObject(bmpDC, hCano1);
@@ -566,6 +591,48 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                            existeCano = TRUE;
                            GetObject(hCano6, sizeof(bmp), &bmp);
                            SelectObject(bmpDC, hCano6);
+                       }
+                       else if (server.infoTab.tab[i][j] == _T('╩')) {
+                           existeCano = TRUE;
+                           GetObject(hCantoTI, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hCantoTI);
+                       }else if(server.infoTab.tab[i][j] == _T('@')){
+                           existeCano = TRUE;
+                           GetObject(hBloco, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hBloco);
+                       }else if(server.infoTab.tab[i][j] == _T('┬')){
+                           existeCano = TRUE;
+                           GetObject(hCanoAT, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hCanoAT);
+                       }
+                       else if(server.infoTab.tab[i][j] == _T('━')){
+                           existeCano = TRUE;
+                           GetObject(hCanoA1, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hCanoA1);
+                       }else if(server.infoTab.tab[i][j] == _T('┃')){
+                           existeCano = TRUE;
+                           GetObject(hCanoA2, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hCanoA2);
+                       }else if(server.infoTab.tab[i][j] == _T('┏')){
+                           existeCano = TRUE;
+                           GetObject(hCanoA3, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hCanoA3);
+                       }else if(server.infoTab.tab[i][j] == _T('┓')){
+                           existeCano = TRUE;
+                           GetObject(hCanoA4, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hCanoA4);
+                       }else if(server.infoTab.tab[i][j] == _T('┛')){
+                           existeCano = TRUE;
+                           GetObject(hCanoA5, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hCanoA5);
+                       }else if(server.infoTab.tab[i][j] == _T('┗')){
+                           existeCano = TRUE;
+                           GetObject(hCanoA6, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hCanoA6);
+                       }else if(server.infoTab.tab[i][j] == _T('┴')){
+                           existeCano = TRUE;
+                           GetObject(hCanoATI, sizeof(bmp), &bmp);
+                           SelectObject(bmpDC, hCanoATI);
                        }
                        if (existeCano) {
                            BitBlt(hdc, (26 * j) + 15, (26 * i) + 65, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
