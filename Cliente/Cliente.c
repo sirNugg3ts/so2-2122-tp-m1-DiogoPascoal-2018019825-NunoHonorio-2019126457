@@ -94,6 +94,7 @@ int WINAPI _tWinMain(HINSTANCE hInst, // instancia atual app
     wcApp.hbrBackground = CreateSolidBrush(RGB(255, 255, 255));
     BOOL fSuccess=FALSE;
     DWORD dwMode;
+    
     while (1)
     {
         hPipe = CreateFile(
@@ -103,7 +104,7 @@ int WINAPI _tWinMain(HINSTANCE hInst, // instancia atual app
             0,              // no sharing 
             NULL,           // default security attributes
             OPEN_EXISTING,  // opens existing pipe 
-            0,              // default attributes 
+            FILE_FLAG_OVERLAPPED,              // default attributes 
             NULL);          // no template file 
 
       // Break if the pipe handle is valid. 
@@ -120,23 +121,23 @@ int WINAPI _tWinMain(HINSTANCE hInst, // instancia atual app
 
         // All pipe instances are busy, so wait for 20 seconds. 
 
-        if (!WaitNamedPipe(NOME_PIPE, 20000))
+        if (!WaitNamedPipe(NOME_PIPE, NMPWAIT_USE_DEFAULT_WAIT))
         {
-            _tprintf(TEXT("Could not open pipe: 20 second wait timed out."));
+            _tprintf(TEXT("Could not open pipe"));
             return -1;
         }
     }
-    dwMode = PIPE_READMODE_MESSAGE;
-    fSuccess = SetNamedPipeHandleState(
-        hPipe,    // pipe handle 
-        &dwMode,  // new pipe mode 
-        NULL,     // don't set maximum bytes 
-        NULL);    // don't set maximum time 
-    if (!fSuccess)
-    {
-        _tprintf(TEXT("SetNamedPipeHandleState failed. GLE=%d\n"), GetLastError());
-        return -1;
-    }
+    //dwMode = PIPE_READMODE_MESSAGE;
+    //fSuccess = SetNamedPipeHandleState(
+    //    hPipe,    // pipe handle 
+    //    &dwMode,  // new pipe mode 
+    //    NULL,     // don't set maximum bytes 
+    //    NULL);    // don't set maximum time 
+    //if (!fSuccess)
+    //{
+    //    _tprintf(TEXT("SetNamedPipeHandleState failed. GLE=%d\n"), GetLastError());
+    //    return -1;
+    //}
 
     // "hbrBackground" = handler para "brush" de pintura do fundo da janela. Devolvido por
     // "GetStockObject".Neste caso o fundo será branco
@@ -274,6 +275,17 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     static infoCliente cliente;
     DWORD nBytes;
     static BOOL jogada = FALSE;
+
+
+    OVERLAPPED ov;
+    HANDLE hEventOV;
+    hEventOV = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+    if (hEventOV == NULL) {
+        //reportar erro
+        exit(-1);
+    }
+
     switch (messg) {
     case WM_CREATE:
     {
@@ -302,6 +314,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
             case MENU_EXIT:
                 DestroyWindow(hWnd);
                 break;
+
             case BUTTON_MOD1:
                 modojogo = 1;
                 GetWindowText(hName, &playerName[0], 100);
@@ -314,12 +327,18 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                 //TODO: Iniciar modo individual
                 cliente.modojogo = modojogo;
                 fSuccess = FALSE;
+                
+                ZeroMemory(&ov, sizeof(ov));
+                ov.hEvent = hEventOV;
                 fSuccess = WriteFile(
                     hPipe,                  // pipe handle 
                     &cliente,             // message 
                     sizeof(infoCliente),              // message length 
                     &nBytes,             // bytes written 
-                    NULL);                  // not overlapped 
+                    &ov);                  // not overlapped 
+
+                WaitForSingleObject(ov.hEvent, INFINITE);
+                GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
 
                 if (!fSuccess)
                 {
@@ -328,8 +347,9 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                 }
                 MessageBox(hWnd, TEXT("Ligação com sucesso \n"), _T("Erro"), MB_OK);
 
-                do
-                {
+               
+                    ZeroMemory(&ov, sizeof(ov));
+                    ov.hEvent = hEventOV;
                     fSuccess = ReadFile(
                         hPipe,    // pipe handle 
                         &server,    // buffer to receive reply 
@@ -337,17 +357,20 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                         &nBytes,  // number of bytes read 
                         NULL);    // not overlapped 
 
-                    if (!fSuccess && GetLastError() != ERROR_MORE_DATA)
-                        break;
+                    WaitForSingleObject(ov.hEvent, INFINITE);
+                    GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
 
-                } while (!fSuccess);  // repeat loop if ERROR_MORE_DATA 
+                    
+                        
+
+                
 
                 if (!fSuccess)
                 {
                     MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
                     return -1;
                 }
-                MessageBox(hWnd, TEXT("Tam mapa = %d\n"), server.infoTab.tam, _T("Aviso"), MB_OK);
+              
 
                 //
                 InvalidateRect(hWnd, NULL, FALSE);
@@ -367,12 +390,17 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                 _tcscpy_s(cliente.nome, 256, playerName);
                 cliente.modojogo = modojogo;
                 fSuccess = FALSE;
+                ZeroMemory(&ov, sizeof(ov));
+                ov.hEvent = hEventOV;
                 fSuccess = WriteFile(
                     hPipe,                  // pipe handle 
                     &cliente,             // message 
                     sizeof(infoCliente),              // message length 
                     &nBytes,             // bytes written 
-                    NULL);                  // not overlapped 
+                    &ov);                  // not overlapped 
+
+                WaitForSingleObject(ov.hEvent, INFINITE);
+                GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
 
                 if (!fSuccess)
                 {
@@ -381,26 +409,25 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                 }
                 //MessageBox(hWnd, TEXT("COMIA A TUA PRIMA 2 \n"), _T("Erro"), MB_OK);
                 //Ler do servidor
-                do
-                {
-                    fSuccess = ReadFile(
-                        hPipe,    // pipe handle 
-                        &server,    // buffer to receive reply 
-                        sizeof(infoServidor),  // size of buffer 
-                        &nBytes,  // number of bytes read 
-                        NULL);    // not overlapped 
+                ZeroMemory(&ov, sizeof(ov));
+                ov.hEvent = hEventOV;
+                fSuccess = ReadFile(
+                    hPipe,    // pipe handle 
+                    &server,    // buffer to receive reply 
+                    sizeof(infoServidor),  // size of buffer 
+                    &nBytes,  // number of bytes read 
+                    NULL);    // not overlapped 
 
-                    if (!fSuccess && GetLastError() != ERROR_MORE_DATA)
-                        break;
+                WaitForSingleObject(ov.hEvent, INFINITE);
+                GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
 
-                } while (!fSuccess);  // repeat loop if ERROR_MORE_DATA 
 
                 if (!fSuccess)
                 {
                     MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
                     return -1;
                 }
-                MessageBox(hWnd, TEXT("Tam mapa = %d\n"), server.infoTab.tam, _T("Aviso"), MB_OK);
+                
 
                 //DrawText(hdc, &c, 1, &rect, DT_SINGLELINE | DT_NOCLIP);
                 start = TRUE;
@@ -409,6 +436,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
           
         }
         break;
+        
     }
     case WM_LBUTTONDOWN: // <-BOTAO ESQUERDO, BOTADO DIREITO -> WM_RBUTTONDOWN
     {
@@ -508,32 +536,29 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
         SetBkMode(hdc, TRANSPARENT);
         if (aux == 1) {
 
+            ZeroMemory(&ov, sizeof(ov));
+            ov.hEvent = hEventOV;
             fSuccess = WriteFile(
                 hPipe,                  // pipe handle 
                 &cliente,             // message 
                 sizeof(infoCliente),              // message length 
                 &nBytes,             // bytes written 
-                NULL);                  // not overlapped 
+                &ov);                  // not overlapped 
 
-            if (!fSuccess)
-            {
-                MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
-                return -1;
-            }
+            WaitForSingleObject(ov.hEvent, INFINITE);
+            GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
 
-            do
-            {
-                fSuccess = ReadFile(
-                    hPipe,    // pipe handle 
-                    &server,    // buffer to receive reply 
-                    sizeof(infoServidor),  // size of buffer 
-                    &nBytes,  // number of bytes read 
-                    NULL);    // not overlapped 
+            ZeroMemory(&ov, sizeof(ov));
+            ov.hEvent = hEventOV;
+            fSuccess = ReadFile(
+                hPipe,    // pipe handle 
+                &server,    // buffer to receive reply 
+                sizeof(infoServidor),  // size of buffer 
+                &nBytes,  // number of bytes read 
+                NULL);    // not overlapped 
 
-                if (!fSuccess && GetLastError() != ERROR_MORE_DATA)
-                    break;
-
-            } while (!fSuccess);  // repeat loop if ERROR_MORE_DATA 
+            WaitForSingleObject(ov.hEvent, INFINITE);
+            GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
 
             if (!fSuccess)
             {
