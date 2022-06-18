@@ -33,7 +33,57 @@
 //			1) É chamada pelo Windows (callback) 
 //			2) Executa código em função da mensagem recebida
 
+static infoServidor server;
+static infoCliente cliente;
+
 LRESULT CALLBACK TrataEventos(HWND, UINT, WPARAM, LPARAM);
+
+DWORD WINAPI leResposta(LPVOID lpData) {
+    DADOS_THREAD_ATUALIZA_TABULEIRO* dados = (DADOS_THREAD_ATUALIZA_TABULEIRO*)lpData;
+    TCHAR szStr[256];
+    DWORD dwLidos, res;
+
+    OVERLAPPED ov;
+    HANDLE hEvento;
+    DWORD fSuccess;
+    hEvento = CreateEvent(NULL, TRUE, FALSE, NULL);
+    HANDLE hEventoMapa = OpenEvent(EVENT_ALL_ACCESS, TRUE, TEXT("SO2_EVENTO_MAPA"));
+    if (hEventoMapa == NULL) {
+        //nao abriu o evento
+        return -1;
+    }
+
+    do {
+        WaitForSingleObject(hEventoMapa, INFINITE);
+
+        ZeroMemory(&ov, sizeof(ov));
+        ov.hEvent = hEvento;
+        fSuccess = WriteFile(
+            dados->hPipe,                  // pipe handle 
+            &cliente,             // message 
+            sizeof(infoCliente),              // message length 
+            &dwLidos,             // bytes written 
+            &ov);                  // not overlapped 
+
+        WaitForSingleObject(ov.hEvent, INFINITE);
+        GetOverlappedResult(dados->hPipe, &ov, &dwLidos, FALSE);
+
+        ZeroMemory(&ov, sizeof(ov));
+        ov.hEvent = hEvento;
+         fSuccess = ReadFile(
+             dados->hPipe,    // pipe handle 
+            &server,    // buffer to receive reply 
+            sizeof(infoServidor),  // size of buffer 
+            &dwLidos,  // number of bytes read 
+            &ov);    // not overlapped 
+
+        WaitForSingleObject(ov.hEvent, INFINITE);
+        GetOverlappedResult(dados->hPipe, &ov, &dwLidos, FALSE);
+        Sleep(1000);
+        InvalidateRect(dados->hWnd, NULL, TRUE); // requisita WM_PAINT 
+    } while (1);
+    return 0;
+}
 
 // Nome da classe da janela (para programas de uma só janela, normalmente este nome é 
 // igual ao do próprio programa) "szprogName" é usado mais abaixo na definição das 
@@ -94,6 +144,7 @@ int WINAPI _tWinMain(HINSTANCE hInst, // instancia atual app
     wcApp.hbrBackground = CreateSolidBrush(RGB(255, 255, 255));
     BOOL fSuccess=FALSE;
     DWORD dwMode;
+
     
     while (1)
     {
@@ -126,6 +177,8 @@ int WINAPI _tWinMain(HINSTANCE hInst, // instancia atual app
             _tprintf(TEXT("Could not open pipe"));
             return -1;
         }
+
+
     }
     //dwMode = PIPE_READMODE_MESSAGE;
     //fSuccess = SetNamedPipeHandleState(
@@ -174,6 +227,17 @@ int WINAPI _tWinMain(HINSTANCE hInst, // instancia atual app
                       // normal/modal); é passado como parâmetro de WinMain()
     UpdateWindow(hWnd);		// Refrescar a janela (Windows envia à janela uma 
                       // mensagem para pintar, mostrar dados, (refrescar)… 
+                      // 
+
+    HANDLE hThreadReads;
+    DWORD dwTid;
+    DADOS_THREAD_ATUALIZA_TABULEIRO dados;
+    dados.hPipe = hPipe;
+    dados.hWnd = hWnd;
+    hThreadReads = CreateThread(NULL, 0, leResposta, &dados , 0, &dwTid);
+    if (hThreadReads == NULL) {
+        return -1;
+    }
     // ============================================================================
     // 5. Loop de Mensagens
     // ============================================================================
@@ -271,8 +335,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     static TCHAR queue[6];
     static int next = 0;
     int updateQueue = 0;
-    static infoServidor server;
-    static infoCliente cliente;
+ 
     DWORD nBytes;
     static BOOL jogada = FALSE;
 
@@ -346,31 +409,6 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                     return -1;
                 }
                 MessageBox(hWnd, TEXT("Ligação com sucesso \n"), _T("Erro"), MB_OK);
-
-               
-                    ZeroMemory(&ov, sizeof(ov));
-                    ov.hEvent = hEventOV;
-                    fSuccess = ReadFile(
-                        hPipe,    // pipe handle 
-                        &server,    // buffer to receive reply 
-                        sizeof(infoServidor),  // size of buffer 
-                        &nBytes,  // number of bytes read 
-                        NULL);    // not overlapped 
-
-                    WaitForSingleObject(ov.hEvent, INFINITE);
-                    GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
-
-                    
-                        
-
-                
-
-                if (!fSuccess)
-                {
-                    MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
-                    return -1;
-                }
-              
 
                 //
                 InvalidateRect(hWnd, NULL, FALSE);

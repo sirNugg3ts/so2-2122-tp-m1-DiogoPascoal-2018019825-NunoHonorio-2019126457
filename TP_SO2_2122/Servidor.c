@@ -603,6 +603,8 @@ int _tmain(int argc, TCHAR* argv[])
     // FALSE nao fazer reset automatico -- TRUE começar assinalado o ev
     dados.hEventoMapa = CreateEvent(NULL, TRUE, FALSE, TEXT("SO2_EVENTO_MAPA"));
 
+    
+
 
     if (dados.hSemEscrita == NULL || dados.hSemLeitura == NULL || dados.hMutex == NULL || dados.hEventoMapa == NULL) {
         _tprintf(TEXT("Erro no CreateSemaphore ou no CreateMutex\n"));

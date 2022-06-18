@@ -6,6 +6,11 @@
 #include "resource.h"
 
 typedef struct {
+    HANDLE hPipe;
+    HANDLE hWnd;
+}DADOS_THREAD_ATUALIZA_TABULEIRO;
+
+typedef struct {
     int xPos, yPos;
     TCHAR c;
 }PosChar;
