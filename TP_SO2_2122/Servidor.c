@@ -22,40 +22,98 @@
 
 #define NOME_PIPE TEXT("\\\\.\\pipe\\TPSO2122_SERVER_CLIENTE")
 
-DWORD WINAPI ThreadServerClient(LPVOID param) {
-    DadosThreads* dados = (DadosThreads*)param;
-    BOOL fSuccess=FALSE;
-    DWORD nBytes;
-    infoCliente mensagemCliente;
-    infoServidor mensagemServidor;
-    while (1) {
-        _tprintf(TEXT("[THREAD] TOU DENTRO DA THREAD\n"));
-        do {
-            fSuccess = ReadFile(
-                dados->pipes.pipeInfo[0].hPipes,
-                &mensagemCliente,
-                sizeof(infoCliente),
-                &nBytes,
-                NULL);
-        } while (!fSuccess);
-        _tprintf(_T("Nome : %s e Modalidade: %d \n"),mensagemCliente.nome, mensagemCliente.modojogo);
-        mensagemServidor.infoTab = dados->memPar->tabMem;
 
-        if (!WriteFile(dados->pipes.pipeInfo[0].hPipes, &mensagemServidor, sizeof(infoServidor), &nBytes, NULL)) {
-            _tprintf(_T("Erro ao enviar mensagem para o Cliente!! \n"));
-        }
-        else {
-            _tprintf(_T("Enviou mensagem para o Cliente com sucesso!! \n"));
-        }
-        
-    }
-    
+void StartandDest(Tabuleiro* tab) {
+    srand(time(NULL));
+    tab->startCel = rand() % tab->tam;
+    tab->destCel = tab->tam - tab->startCel;
+    tab->tab[0][tab->startCel] = _T('╦');
+    tab->tab[tab->tam - 1][tab->destCel - 1] = _T('╩');
+
 }
 
-int MoverAgua(Tabuleiro *tab) {
+void gamemap(Tabuleiro* tab) {
+    //Função para inicializar o tabuleiro
+
+    for (int i = 0; i < tab->tam; i++) {
+        for (int j = 0; j < tab->tam; j++) {
+            tab->tab[i][j] = _T('x');
+        }
+    }
+}
+
+void processCanos(Tabuleiro* tab, int modo) {
+    int random, i;      // ═ ║ ╔ ╗ ╝ ╚
+    if (modo == 1) {
+        if (tab->queue[0] == _T('═')) {
+            for (i = 0; i < 5; i++) {
+                tab->queue[i] = tab->queue[i + 1];
+            }
+            tab->queue[5] = _T('═');
+        }
+        else if (tab->queue[0] == _T('║')) {
+            for (i = 0; i < 5; i++) {
+                tab->queue[i] = tab->queue[i + 1];
+            }
+            tab->queue[5] = _T('║');
+        }
+        else if (tab->queue[0] == _T('╔')) {
+            for (i = 0; i < 5; i++) {
+                tab->queue[i] = tab->queue[i + 1];
+            }
+            tab->queue[5] = _T('╔');
+        }
+        else if (tab->queue[0] == _T('╗')) {
+            for (i = 0; i < 5; i++) {
+                tab->queue[i] = tab->queue[i + 1];
+            }
+            tab->queue[5] = _T('╗');
+        }
+        else if (tab->queue[0] == _T('╝')) {
+            for (i = 0; i < 5; i++) {
+                tab->queue[i] = tab->queue[i + 1];
+            }
+            tab->queue[5] = _T('╝');
+        }
+        else if (tab->queue[0] == _T('╚')) {
+            for (i = 0; i < 5; i++) {
+                tab->queue[i] = tab->queue[i + 1];
+            }
+            tab->queue[5] = _T('╚');
+        }
+    }
+    else if (modo == 2) {
+        for (int i = 0; i < 5; i++) {
+            tab->queue[i] = tab->queue[i + 1];
+            if (i == 4) {
+                random = rand() % 6;
+                if (random == 0) {
+                    tab->queue[5] = _T('═');
+                }
+                else if (random == 1) {
+                    tab->queue[5] = _T('║');
+                }
+                else if (random == 2) {
+                    tab->queue[5] = _T('╔');
+                }
+                else if (random == 3) {
+                    tab->queue[5] = _T('╗');
+                }
+                else if (random == 4) {
+                    tab->queue[5] = _T('╝');
+                }
+                else if (random == 5) {
+                    tab->queue[5] = _T('╚');
+                }
+            }
+        }
+    }
+}
+
+int MoverAgua(Tabuleiro* tab) {
     if (tab->agua == 1) {
         if (tab->tab[tab->aguay][tab->aguax] == _T('┬')) {
-            if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╔') && tab->aguax - 1 < tab->tam) {
+            if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╔') && tab->aguax - 1 >= 0) {
                 tab->tab[tab->aguay][tab->aguax - 1] = _T('┏');
                 tab->aguax = tab->aguax - 1;
                 return 1;
@@ -75,7 +133,7 @@ int MoverAgua(Tabuleiro *tab) {
                 tab->aguax = tab->aguax + 1;
                 return 1;
             }
-            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('═') && tab->aguax - 1 < tab->tam) {
+            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('═') && tab->aguax - 1 >= 0) {
                 tab->tab[tab->aguay][tab->aguax - 1] = _T('━');
                 tab->aguax = tab->aguax - 1;
                 return 1;
@@ -90,25 +148,21 @@ int MoverAgua(Tabuleiro *tab) {
                 tab->aguay = tab->aguay + 1;
                 return 1;
             }
-            else {
-                _tprintf(_T("A agua transbordou!! \n"));
-                return 2;
-            }
         }
-        else if (tab->tab[tab->aguay][tab->aguax] == _T('┃') && tab->aguay + 1 < tab->tam || tab->tab[tab->aguay][tab->aguax] == _T('┏') && tab->aguay + 1 < tab->tam || tab->tab[tab->aguay][tab->aguax] == _T('┓') && tab->aguay + 1 < tab->tam ) {
-            if (tab->tab[tab->aguay + 1][tab->aguax] == _T('║')) {
-                tab->tab[tab->aguay + 1][tab->aguax] = _T('┃');
-                tab->aguay = tab->aguay + 1;
+        else if (tab->tab[tab->aguay][tab->aguax] == _T('━')) {   //   x+1 x-1 ━   x-1 ┗ ┏ x+1 ┛ ┓
+            if (tab->tab[tab->aguay][tab->aguax + 1] == _T('═') && tab->aguax + 1 < tab->tam) {
+                tab->tab[tab->aguay][tab->aguax + 1] = _T('━');
+                tab->aguax = tab->aguax + 1;
                 return 1;
             }
-            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╝')) {
-                tab->tab[tab->aguay + 1][tab->aguax] = _T('┛');
-                tab->aguay = tab->aguay + 1;
+            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('═') && tab->aguax - 1 >= 0) {
+                tab->tab[tab->aguay][tab->aguax - 1] = _T('━');
+                tab->aguax = tab->aguax - 1;
                 return 1;
             }
-            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╚')) {
-                tab->tab[tab->aguay + 1][tab->aguax] = _T('┗');
-                tab->aguay = tab->aguay + 1;
+            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╔') && tab->aguax - 1 >= 0) {
+                tab->tab[tab->aguay][tab->aguax - 1] = _T('┏');
+                tab->aguax = tab->aguax - 1;
                 return 1;
             }
             else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╗') && tab->aguax + 1 < tab->tam) {
@@ -116,141 +170,348 @@ int MoverAgua(Tabuleiro *tab) {
                 tab->aguax = tab->aguax + 1;
                 return 1;
             }
-            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('═') && tab->aguax + 1 < tab->tam) {
-                tab->tab[tab->aguay][tab->aguax + 1] = _T('━');
-                tab->aguax = tab->aguax + 1;
-                return 1;
-            }
-            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╩')) {
-                tab->tab[tab->aguay + 1][tab->aguax] = _T('┴');
-                tab->aguay = tab->aguay + 1;
-                return 1;
-            }else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╔')) {
-                tab->tab[tab->aguay][tab->aguax - 1] = _T('┏');
-                tab->aguax = tab->aguax - 1;
-                return 1;
-            }
-            else if (tab->tab[tab->aguay-1][tab->aguax] == _T('╔')) {
-                tab->tab[tab->aguay-1][tab->aguax] = _T('┏');
-                tab->aguay = tab->aguay - 1;
-                return 1;
-            }
-            else {
-                _tprintf(_T("A agua transbordou!! \n"));
-                return 2;
-            }
-        }
-        else if (tab->tab[tab->aguay][tab->aguax] == _T('┛') || tab->tab[tab->aguay][tab->aguax] == _T('━') ) {
-          
-           if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╚')) {
+            else if (tab->tab[tab->aguay][tab->aguax] == _T('╚') && tab->aguax - 1 >= 0) {
                 tab->tab[tab->aguay][tab->aguax - 1] = _T('┗');
                 tab->aguax = tab->aguax - 1;
                 return 1;
             }
-            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('═')) {
-                tab->tab[tab->aguay][tab->aguax - 1] = _T('━');
-                tab->aguax = tab->aguax - 1;
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╝') && tab->aguay + 1 < tab->tam) {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┛');
+                tab->aguay = tab->aguay + 1;
                 return 1;
             }
-            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╩')) {
+            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╩') && tab->aguax + 1 < tab->tam) {
                 tab->tab[tab->aguay][tab->aguax - 1] = _T('┴');
-                tab->aguax = tab->aguax - 1;
+                _tprintf(_T("A agua chegou ao destino final!! \n"));
+                return 2;
+            }
+            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╩') && tab->aguax + 1 < tab->tam) {
+                tab->tab[tab->aguay][tab->aguax + 1] = _T('┴');
+                _tprintf(_T("A agua chegou ao destino final!! \n"));
+                return 2;
+            }
+        }
+        else if (tab->tab[tab->aguay][tab->aguax] == _T('┃')) {// y+1 ┗ ┛  y-1 ┓ ┏  y+1 e y-1 ┃
+            if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╚') && tab->aguay + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┗');
+                tab->aguay = tab->aguay + 1;
                 return 1;
             }
-            else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('╔')) {
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╝') && tab->aguay + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┛');
+                tab->aguay = tab->aguay + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('║') && tab->aguay + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┃');
+                tab->aguay = tab->aguay + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('║') && tab->aguay - 1 >= 0)
+            {
+                tab->tab[tab->aguay - 1][tab->aguax] = _T('┃');
+                tab->aguay = tab->aguay - 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('╗') && tab->aguay - 1 >= 0)
+            {
+                tab->tab[tab->aguay - 1][tab->aguax] = _T('┓');
+                tab->aguay = tab->aguay - 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('╔') && tab->aguay - 1 >= 0)
+            {
                 tab->tab[tab->aguay - 1][tab->aguax] = _T('┏');
                 tab->aguay = tab->aguay - 1;
                 return 1;
             }
-            else if (tab->tab[tab->aguay][tab->aguax-1] == _T('╔')) {
-               tab->tab[tab->aguay][tab->aguax-1] = _T('┏');
-               tab->aguax = tab->aguax-1;
-               return 1;
-           }
-            else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('╗')) {
-                tab->tab[tab->aguay - 1][tab->aguax] = _T('┓');
-                tab->aguay = tab->aguay - 1;
-                return 1;
-            }else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╝')) {
-                tab->tab[tab->aguay][tab->aguax] = _T('┛');
-                tab->aguax = tab->aguax + 1;
-                return 1;
-            }
-            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╝')) {
-               tab->tab[tab->aguay][tab->aguax + 1] = _T('┛');
-               tab->aguax = tab->aguax + 1;
-               return 1;
-           }else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('║')) {
-               tab->tab[tab->aguay - 1][tab->aguax] = _T('┃');
-               tab->aguay = tab->aguay - 1;
-               return 1;
-           }
-            else {
-                _tprintf(_T("A agua transbordou!! \n"));
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╩') && tab->aguay + 1 < tab->tam) {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┴');
+                _tprintf(_T("A agua chegou ao destino final!! \n"));
                 return 2;
             }
         }
-        else if (tab->tab[tab->aguay][tab->aguax] == _T('━') && tab->aguax + 1 < tab->tam || tab->tab[tab->aguay][tab->aguax] == _T('┗')  && tab->aguax + 1 < tab->tam) {
-            if (tab->tab[tab->aguay][tab->aguax + 1] == _T('═')) {
-                tab->tab[tab->aguay][tab->aguax + 1] = _T('━');
-                tab->aguax = tab->aguax + 1;
-                return 1; 
+        else if (tab->tab[tab->aguay][tab->aguax] == _T('┏')) {// y+1 ┗ ┛ ┃ x+1 ┛ ┓ ━   
+            if (tab->tab[tab->aguay][tab->aguax + 1] == _T('═') && tab->aguax + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('━');
+                tab->aguay = tab->aguay + 1;
+                return 1;
             }
-            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╗')) {
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('║') && tab->aguay + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┃');
+                tab->aguay = tab->aguay + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╝') && tab->aguay + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┛');
+                tab->aguay = tab->aguay + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╝') && tab->aguax + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay][tab->aguax + 1] = _T('┛');
+                tab->aguax = tab->aguax + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╚') && tab->aguay + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┗');
+                tab->aguay = tab->aguay + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╗') && tab->aguay + 1 < tab->tam)
+            {
                 tab->tab[tab->aguay][tab->aguax + 1] = _T('┓');
                 tab->aguax = tab->aguax + 1;
                 return 1;
             }
-            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╩')) {
-                tab->tab[tab->aguay][tab->aguax + 1] = _T('┴');
-                tab->aguax = tab->aguax + 1;
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╩') && tab->aguay + 1 < tab->tam) {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┴');
+                _tprintf(_T("A agua chegou ao destino final!! \n"));
+                return 2;
+            }
+        }
+        else if (tab->tab[tab->aguay][tab->aguax] == _T('┓')) {// x-1 ┗ ┏ ━  y+1 ┛┗ ┃ 
+            if (tab->tab[tab->aguay][tab->aguax - 1] == _T('═') && tab->aguax - 1 > 0)
+            {
+                tab->tab[tab->aguay][tab->aguax - 1] = _T('━');
+                tab->aguax = tab->aguax - 1;
                 return 1;
             }
-            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╝')) {
-                tab->tab[tab->aguay][tab->aguax+1] = _T('┛');
-                tab->aguax = tab->aguax + 1;
+            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╚') && tab->aguax - 1 >= 0)
+            {
+                tab->tab[tab->aguay][tab->aguax - 1] = _T('┗');
+                tab->aguax = tab->aguax - 1;
                 return 1;
-            }else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('╗')) {
+            }
+            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╔') && tab->aguax - 1 >= 0)
+            {
+                tab->tab[tab->aguay][tab->aguax - 1] = _T('┏');
+                tab->aguax = tab->aguax - 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('║') && tab->aguay + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┃');
+                tab->aguay = tab->aguay + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╚') && tab->aguay + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┗');
+                tab->aguay = tab->aguay + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay + 1][tab->aguax] == _T('╩') && tab->aguay + 1 < tab->tam) {
+                tab->tab[tab->aguay + 1][tab->aguax] = _T('┴');
+                _tprintf(_T("A agua chegou ao destino final!! \n"));
+                return 2;
+            }
+        }
+        else if (tab->tab[tab->aguay][tab->aguax] == _T('┛')) { // y-1 ┓ ┏ ┃ x-1 ┏ ┗ ━
+            if (tab->tab[tab->aguay][tab->aguax - 1] == _T('═') && tab->aguax - 1 >= 0)
+            {
+                tab->tab[tab->aguay][tab->aguax - 1] = _T('━');
+                tab->aguax = tab->aguax - 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╚') && tab->aguax - 1 >= 0)
+            {
+                tab->tab[tab->aguay][tab->aguax - 1] = _T('┗');
+                tab->aguax = tab->aguax - 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╔') && tab->aguax - 1 >= 0)
+            {
+                tab->tab[tab->aguay][tab->aguax - 1] = _T('┏');
+                tab->aguax = tab->aguax - 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('║') && tab->aguay - 1 >= 0)
+            {
+                tab->tab[tab->aguay - 1][tab->aguax] = _T('┃');
+                tab->aguay = tab->aguay - 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay - 1][tab->agua] == _T('╔') && tab->aguay - 1 >= 0)
+            {
+                tab->tab[tab->aguay - 1][tab->aguax] = _T('┏');
+                tab->aguay = tab->aguay - 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('╗') && tab->aguay - 1 >= 0)
+            {
                 tab->tab[tab->aguay - 1][tab->aguax] = _T('┓');
                 tab->aguay = tab->aguay - 1;
                 return 1;
             }
-            
-            else {
-                _tprintf(_T("A agua transbordou!! \n"));
+            else if (tab->tab[tab->aguay][tab->aguax - 1] == _T('╩') && tab->aguax - 1 >= 0) {
+                tab->tab[tab->aguay][tab->aguax - 1] = _T('┴');
+                _tprintf(_T("A agua chegou ao destino final!! \n"));
                 return 2;
             }
         }
-        else if (tab->tab[tab->aguay][tab->aguax] == _T('┴')) {
-            _tprintf(_T("A agua chegou ao destino final!! \n"));
-            return 2;
+        else if (tab->tab[tab->aguay][tab->aguax] == _T('┗')) { // y-1 ┓ ┏ ┃ x+1 ┛ ┓ ━
+            if (tab->tab[tab->aguay][tab->aguax + 1] == _T('═') && tab->aguax + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay][tab->aguax + 1] = _T('━');
+                tab->aguax = tab->aguax + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╗') && tab->aguax + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay][tab->aguax + 1] = _T('┓');
+                tab->aguax = tab->aguax + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╝') && tab->aguax + 1 < tab->tam)
+            {
+                tab->tab[tab->aguay][tab->aguax + 1] = _T('┛');
+                tab->aguax = tab->aguax + 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('║') && tab->aguay - 1 > 0)
+            {
+                tab->tab[tab->aguay - 1][tab->aguax] = _T('┃');
+                tab->aguay = tab->aguay - 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay - 1][tab->aguax] == _T('╗') && tab->aguay - 1 > 0)
+            {
+                tab->tab[tab->aguay - 1][tab->aguax] = _T('┓');
+                tab->aguay = tab->aguay - 1;
+                return 1;
+            }
+            else if (tab->tab[tab->aguay - 1][tab->agua] == _T('╔') && tab->aguay - 1 >= 0)
+            {
+                tab->tab[tab->aguay - 1][tab->aguax] = _T('┏');
+                tab->aguay = tab->aguay - 1;
+                return 1;
+            }
+
+            else if (tab->tab[tab->aguay][tab->aguax + 1] == _T('╩') && tab->aguax + 1 < tab->tam) {
+                tab->tab[tab->aguay][tab->aguax + 1] = _T('┴');
+                _tprintf(_T("A agua chegou ao destino final!! \n"));
+                return 2;
+            }
+        }
+        else {
+            _tprintf(_T("A agua transbordou!! \n"));
+            return 3;
         }
     }
+
+
+}
+
+void WINAPI ThreadTerminar(LPVOID param) {
+    DadosThreads* dados = (DadosThreads*)param;
+    WaitForSingleObject(dados->hEventoTerminar, INFINITE);
+    exit(1);
+   
+    
+    return;
 }
 
 void WINAPI ThreadMoveAgua(LPVOID param) {
     DadosThreads* dados = (DadosThreads*)param;
-    int resultado=0;
+    int resultado = 0;
     dados->memPar->tabMem.agua = 1;
+    dados->memPar->win = 1;
     
-    dados->memPar->tabMem.tab[dados->memPar->tabMem.aguay][dados->memPar->tabMem.aguax] = _T('┬');
+    
     Sleep(dados->memPar->tabMem.tempAgua * 1000);
-    while (1) {
-        while (resultado != 2 && dados->memPar->tabMem.agua==1) {
+    while (!dados->terminarAgua) {
 
-            WaitForSingleObject(dados->hMutex, INFINITE);
-            resultado = MoverAgua(&dados->memPar->tabMem);
+        while (dados->memPar->win == 1 && dados->memPar->tabMem.agua == 1)
+        {
+            WaitForSingleObject(dados->hMutex, 1000);
+            
+            if (dados->memPar->tabMem.tab[dados->memPar->tabMem.aguay][dados->memPar->tabMem.aguax] == _T('╦')) {
+                dados->memPar->tabMem.tab[dados->memPar->tabMem.aguay][dados->memPar->tabMem.aguax] = _T('┬');
+            }
+            else {
+                dados->memPar->win = MoverAgua(&dados->memPar->tabMem);
+            }
+            
             SetEvent(dados->hEventoMapa); // quando o mapa é atualizado
             ResetEvent(dados->hEventoMapa);
-           // showmap(&dados->memPar->tabMem);
-            ReleaseMutex(dados->hMutex);
 
-            Sleep(10 * 1000); //De momento move uma por segundo, atualizar para velocidade da agua na segunda meta
+            ReleaseMutex(dados->hMutex);
+            if (dados->jogador->nivel < 7) {
+                Sleep((10 - dados->jogador->nivel) * 1000);
+            }
+            else {
+                Sleep(3000);
+            }
+
         }
+
     }
-    dados->memPar->win = resultado;
+
     return;
 }
+
+DWORD WINAPI ThreadServerClient(LPVOID param) {
+    DadosThreads* dados = (DadosThreads*)param;
+    BOOL fSuccess=FALSE;
+    DWORD nBytes;
+    infoCliente mensagemCliente;
+    infoServidor mensagemServidor;
+    dados->jogador = &mensagemCliente;
+    while (!dados->terminarClientes) {
+       // _tprintf(TEXT("[THREAD] TOU DENTRO DA THREAD\n"));
+        do {
+            fSuccess = ReadFile(
+                dados->pipes.pipeInfo[0].hPipes,
+                &mensagemCliente,
+                sizeof(infoCliente),
+                &nBytes,
+                NULL);
+        } while (!fSuccess);
+        //_tprintf(_T("Nome : %s e Modalidade: %d \n"),mensagemCliente.nome, mensagemCliente.modojogo);
+        // JOGA TUBO , ANDA QUEUE
+        //_tprintf(_T("Linha : %d e Coluna: %d Jogada: %d  Tubo: %c\n"), mensagemCliente.linhaJogada, mensagemCliente.colunaJogada, mensagemCliente.jogada, mensagemCliente.tubo);
+        
+        if (mensagemCliente.jogada == 1) {
+            dados->memPar->tabMem.tab[mensagemCliente.linhaJogada][mensagemCliente.colunaJogada] = mensagemCliente.tubo;
+            processCanos(&dados->memPar->tabMem, 1);
+            for(int i=0; i<6; i++)
+                _tprintf(_T("%c "), dados->memPar->tabMem.queue[i]);
+        } else if (mensagemCliente.jogada == 2) {
+            dados->memPar->tabMem.tab[mensagemCliente.linhaJogada][mensagemCliente.colunaJogada] = _T('x');
+        }
+        else if (dados->memPar->win==2) {
+            mensagemCliente.score = mensagemCliente.score + mensagemCliente.nivel;
+            mensagemCliente.nivel = mensagemCliente.nivel++;
+            TerminateThread(dados->Threads[1],0);
+            gamemap(&dados->memPar->tabMem); // limpa mapa
+            StartandDest(&dados->memPar->tabMem); // calcula inicias
+            dados->memPar->tabMem.aguax = dados->memPar->tabMem.startCel; // x inicial agua
+            dados->memPar->tabMem.aguay = 0; // y inicial agua 
+            dados->Threads[1] = CreateThread(NULL, 0, ThreadMoveAgua, &dados, 0, NULL);
+            _tprintf(_T("O jogador passou para o nivel %d, digite comecar para a agua iniciar \n"),dados->jogador->nivel);
+            dados->memPar = 1;
+        }
+        mensagemServidor.infoTab = dados->memPar->tabMem;
+        if (!WriteFile(dados->pipes.pipeInfo[0].hPipes, &mensagemServidor, sizeof(infoServidor), &nBytes, NULL)) {
+            _tprintf(_T("Erro ao enviar mensagem para o Cliente!! \n"));
+        }
+        else {
+            _tprintf(_T("Enviou mensagem para o Cliente com sucesso!! \n"));
+        }
+        
+    }
+    
+}
+
+
 
 void funcaodebug(Tabuleiro *tab, int i) {
     //Função com mapas prefeitos para efeitos de debugging e testagem
@@ -298,7 +559,7 @@ void queueCanos(Tabuleiro* tab, int modo) {
     int random;
     
     if (modo == 1) {
-        tab->queue[0] = _T('═');
+        tab->queue[0] = _T('═'); 
         tab->queue[1] = _T('║');
         tab->queue[2] = _T('╔');
         tab->queue[3] = _T('╗');
@@ -331,83 +592,7 @@ void queueCanos(Tabuleiro* tab, int modo) {
     }
 
 }
-void processCanos(Tabuleiro* tab, int modo) {
-    int random;
-    if (modo == 1) {
-        if (tab->queue[0] = _T('═')) {
-            for (int i = 0; i < 5; i++) {
-                tab->queue[i] = tab->queue[i + 1];
-            }
-            tab->queue[5] = _T('═');
-        }
-        else if (tab->queue[0] = _T('║')) {
-            for (int i = 0; i < 5; i++) {
-                tab->queue[i] = tab->queue[i + 1];
-            }
-            tab->queue[5] = _T('║');
-        }
-        else if (tab->queue[0] = _T('╔')) {
-            for (int i = 0; i < 5; i++) {
-                tab->queue[i] = tab->queue[i + 1];
-            }
-            tab->queue[5] = _T('╔');
-        }
-        else if (tab->queue[0] = _T('╗')) {
-            for (int i = 0; i < 5; i++) {
-                tab->queue[i] = tab->queue[i + 1];
-            }
-            tab->queue[5] = _T('╗');
-        }
-        else if (tab->queue[0] = _T('╝')) {
-            for (int i = 0; i < 5; i++) {
-                tab->queue[i] = tab->queue[i + 1];
-            }
-            tab->queue[5] = _T('╝');
-        }
-        else if (tab->queue[0] = _T('╚')) {
-            for (int i = 0; i < 5; i++) {
-                tab->queue[i] = tab->queue[i + 1];
-            }
-            tab->queue[5] = _T('╚');
-        }
-    }
-    else if (modo == 2) {
-        for (int i = 0; i < 5; i++) {
-            tab->queue[i] = tab->queue[i + 1];
-            if (i == 4) {
-                random = rand() % 6;
-                if (random == 0) {
-                    tab->queue[5] = _T('═');
-                }
-                else if (random == 1) {
-                    tab->queue[5] = _T('║');
-                }
-                else if (random == 2) {
-                    tab->queue[5] = _T('╔');
-                }
-                else if (random == 3) {
-                    tab->queue[5] = _T('╗');
-                }
-                else if (random == 4) {
-                    tab->queue[5] = _T('╝');
-                }
-                else if (random == 5) {
-                    tab->queue[5] = _T('╚');
-                }
-            }
-        }
-    }
-}
-void gamemap(Tabuleiro* tab) {
-    //Função para inicializar o tabuleiro
 
-
-    for (int i = 0; i < tab->tam; i++) {
-        for (int j = 0; j < tab->tam; j++) {
-            tab->tab[i][j] = _T('x');
-        }
-    }
-}
 void showmap(Tabuleiro* tab) {
     for (int c = 0; c < tab->tam + 2; c++) {
         if (c == 0) {
@@ -457,11 +642,15 @@ void processarComando(CelulaBuffer cel, DadosThreads* dados) {
     }
     else if (_tcscmp(cel.comando[0], _T("bloco")) == 0) { 
         // cel.comando[1]- linha cel.comando[2]- coluna
+        
         TCHAR y = *cel.comando[1];
         TCHAR x = *cel.comando[2];
         y = _wtoi(cel.comando[1]);
         x = _wtoi(cel.comando[2]);
         dados->memPar->tabMem.tab[y][x] = _T('@');   
+        SetEvent(dados->hEventoMapa); // quando o mapa é atualizado
+        ResetEvent(dados->hEventoMapa);
+
     }
     else if (_tcscmp(cel.comando[0], _T("aleatorio")) == 0) {
         if (_tcscmp(cel.comando[1], _T("ativar")) == 0) {
@@ -479,66 +668,147 @@ DWORD WINAPI ThreadComandos(LPVOID param) {
     CelulaBuffer cel;
     int contador = 0;
     int soma = 0;
+    while (1) {
+        while (dados->memPar->win != 2) {
+            //aqui entramos na logica da aula teorica
 
-    while (dados->memPar->win!=2) {
-        //aqui entramos na logica da aula teorica
+            //esperamos por uma posicao para lermos
+            WaitForSingleObject(dados->hSemLeitura, INFINITE);
 
-        //esperamos por uma posicao para lermos
-        WaitForSingleObject(dados->hSemLeitura, INFINITE);
-
-        //esperamos que o mutex esteja livre
-        WaitForSingleObject(dados->hMutex, INFINITE);
+            //esperamos que o mutex esteja livre
+            WaitForSingleObject(dados->hMutex, INFINITE);
 
 
-        //vamos copiar da proxima posicao de leitura do buffer circular para a nossa variavel cel
-        CopyMemory(&cel, &dados->memPar->buffer[dados->memPar->posL], sizeof(CelulaBuffer));
-        dados->memPar->posL++; //incrementamos a posicao de leitura para o proximo consumidor ler na posicao seguinte
+            //vamos copiar da proxima posicao de leitura do buffer circular para a nossa variavel cel
+            CopyMemory(&cel, &dados->memPar->buffer[dados->memPar->posL], sizeof(CelulaBuffer));
+            dados->memPar->posL++; //incrementamos a posicao de leitura para o proximo consumidor ler na posicao seguinte
 
-        //se apos o incremento a posicao de leitura chegar ao fim, tenho de voltar ao inicio
-        if (dados->memPar->posL == TAM_BUFFER)
-            dados->memPar->posL = 0;
+            //se apos o incremento a posicao de leitura chegar ao fim, tenho de voltar ao inicio
+            if (dados->memPar->posL == TAM_BUFFER)
+                dados->memPar->posL = 0;
 
+            _tprintf(_T("%s "),cel.comando[0]);
+            if (_tcscmp(cel.comando[0], _T("bloco")) == 0) {
+                _tprintf(_T("bloco recebido "));
+                for (int i = 0; i < 3; i++) {
+                    _tprintf(_T("%s "), cel.comando[i]);
+                }
+            }
+            else if (_tcscmp(cel.comando[0], _T("pausa")) == 0) {
+                for (int i = 0; i < 2; i++) {
+                    _tprintf(_T("%s "), cel.comando[i]);
+                }
+            }
+            else if (_tcscmp(cel.comando[0], _T("aleatorio")) == 0) {
+                for (int i = 0; i < 2; i++) {
+                    _tprintf(_T("%s "), cel.comando[i]);
+                }
+            }
+            processarComando(cel, dados);
+            //libertamos o mutex
+            ReleaseMutex(dados->hMutex);
+
+            //libertamos o semaforo. temos de libertar uma posicao de escrita
+            ReleaseSemaphore(dados->hSemEscrita, 1, NULL);
+        }
+    }
+
+   
+
+    return 0;
+}
+
+
+void pedirComando(CelulaBuffer* buffer, int tam) {
+    TCHAR* token = NULL;
+    TCHAR comando[100], comandos[3][20], proxComando[100];
+    int n;
+    while (1) {
+        n = 0;
+        _fgetts(comando, 20, stdin);
+        token = _tcstok_s(comando, _T(" ,\t\n"), &proxComando);
+
+        while (token != NULL) {
+            if (token != NULL) {
+                _tcscpy_s(comandos[n], 20, token);
+                token = _tcstok_s(NULL, _T(" ,\t\n"), &proxComando);
+                n++;
+            }
+        }
+        for (int i = 0; i < n; i++) {
+            _tprintf(_T("Comandos : %s indice %d\n"), comandos[i], i);
+        }
+        if (_tcscmp(comandos[0], _T("bloco")) == 0 && n == 3) {
+            if (comandos[1] != NULL && comandos[2] != NULL) {
+                if (_wtoi(comandos[1]) >= 0 && comandos[2] >= 0 && _wtoi(comandos[1]) < tam && _wtoi(comandos[2]) < tam) {
+                    break;
+                }
+            }
+        }
+        else if (_tcscmp(comandos[0], _T("pausa")) == 0 && n == 2) {
+            if (comandos[1] != NULL && comandos[1] > 0) {
+                break;
+            }
+        }
+        else if (_tcscmp(comandos[0], _T("aleatorio")) == 0 && n == 2) {
+            if (_tcscmp(comandos[1], _T("ativar")) == 0 && comandos[1] != NULL || _tcscmp(comandos[1], _T("desativar")) == 0 && comandos[1] != NULL) {
+                break;
+            }
+        }
+        else if (_tcscmp(comandos[0], _T("comandos")) == 0 && n == 1) {
+            _tprintf(_T("Comandos do Monitor: \n"));
+            _tprintf(_T("1. bloco linha coluna \n"));
+            _tprintf(_T("2. pausa segundos \n"));
+            _tprintf(_T("3. aleatorio ativar \n"));
+        }
+        else {
+            _tprintf(_T("Comando inválido! \n"));
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        _tcscpy_s(buffer->comando[i], 20, comandos[i]);
+    }
+}
+DWORD WINAPI ThreadComandosServer(LPVOID param) {
+    DadosThreads* dados = (DadosThreads*)param;
+    while (!dados->terminarComandosServidor) {
+        _fgetts(dados->comando, 20, stdin);
+        if (_tcscmp(dados->comando, _T("comecar\n")) == 0) {
+            _tprintf(_T("[Servidor.C/Main] Vou iniciar a Água !!\n"));
+            dados->memPar->win = 1;
+            ResumeThread(dados->Threads[1]);
+        }
+        else if (_tcscmp(dados->comando, _T("stopwater\n")) == 0) {
+            _tprintf(_T("[Servidor.C/Main] Vou pausar a Água !!\n"));
+
+            dados->memPar->tabMem.agua = 0;
+        }
+        else if (_tcscmp(dados->comando, _T("startwater\n")) == 0) {
+            _tprintf(_T("[Servidor.C/Main] Vou iniciar a Água !!\n"));
+
+            dados->memPar->tabMem.agua = 1;
+        }
+        else if (_tcscmp(dados->comando, _T("encerra\n")) == 0) {
+            SetEvent(dados->hEventoTerminar);
+            return 0;
+        }
+        else if (_tcscmp(dados->comando, _T("listar\n")) == 0) {
+            _tprintf(_T("Jogadores:\n%s - %d"), dados->jogador->nome, dados->jogador->score);
+        }
+            
         
-        if (_tcscmp(cel.comando[0], _T("bloco")) == 0) {
-            for (int i = 0; i < 3; i++) {
-                _tprintf(_T("%s "), cel.comando[i]);
-            }
-        }
-        else if (_tcscmp(cel.comando[0], _T("pausa")) == 0) {
-            for (int i = 0; i < 2; i++) {
-                _tprintf(_T("%s "), cel.comando[i]);
-            }
-        }
-        else if (_tcscmp(cel.comando[0], _T("aleatorio")) == 0) {
-            for (int i = 0; i < 2; i++) {
-                _tprintf(_T("%s "), cel.comando[i]);
-            }
-        }
-        processarComando(cel, dados);
-        //libertamos o mutex
-        ReleaseMutex(dados->hMutex);
-
-        //libertamos o semaforo. temos de libertar uma posicao de escrita
-        ReleaseSemaphore(dados->hSemEscrita, 1, NULL);
     }
 
     return 0;
 }
-void StartandDest(Tabuleiro* tab) {
-    srand(time(NULL));
-    tab->startCel = rand() % tab->tam; 
-    tab->destCel = tab->tam - tab->startCel; 
-    tab->tab[0][tab->startCel] = _T('╦');
-    tab->tab[tab->tam-1][tab->destCel - 1] = _T('╩');
 
-}
+
 
 int _tmain(int argc, TCHAR* argv[])
 {
     DadosThreadComsClientes dadosThreadCliente;
     DWORD tamMapa, waterspeed, velocidadeAgua;
     HANDLE hFileMap; //handle para o file map
-    HANDLE Threads[3];
     HANDLE ThreadPipes;
     HANDLE hPipe;
     DadosThreads dados;
@@ -658,12 +928,12 @@ int _tmain(int argc, TCHAR* argv[])
     dados.terminar = 0;
     dados.memPar->tabMem.tam = tamMapa;
     dados.memPar->tabMem.tempAgua = waterspeed;
-    dados.memPar->tabMem.aguax = 3; // mudar para dinamico na segunda meta
-    dados.memPar->tabMem.aguay = 0;
     queueCanos(&dados.memPar->tabMem, 1);
     gamemap(&dados.memPar->tabMem);
-    // StartandDest(&tab); para a 2a meta 
-    funcaodebug(&dados.memPar->tabMem, 1);
+    StartandDest(&dados.memPar->tabMem); //para a 2a meta
+    dados.memPar->tabMem.aguax = dados.memPar->tabMem.startCel;
+    dados.memPar->tabMem.aguay = 0;
+    //funcaodebug(&dados.memPar->tabMem, 1);
     showmap(&dados.memPar->tabMem);
     TCHAR comando[100];
 
@@ -701,6 +971,13 @@ int _tmain(int argc, TCHAR* argv[])
             return -1;
         }
 
+        HANDLE eventoTerminar = CreateEvent(NULL, TRUE, FALSE, TEXT("SO2_TERMINAR_TUDO"));
+        if (eventoTerminar == NULL) {
+            _tprintf(TEXT("Não foi possível criar evento para terminar"));
+            return -1;
+        }
+        dados.hEventoTerminar = eventoTerminar;
+
         dados.pipes.pipeInfo[i].hPipes = hPipe;
         dados.pipes.pipeInfo[i].active = FALSE;
         
@@ -716,20 +993,22 @@ int _tmain(int argc, TCHAR* argv[])
         ConnectNamedPipe(hPipe, &dados.pipes.pipeInfo[i].overlap);
     }
 
-    
+    dados.terminar = 0;
+    dados.terminarMonitor = 0;  dados.terminarComandosServidor = 0;  dados.terminarAgua = 0;  dados.terminarClientes = 0;
 
 
-    Threads[0] = CreateThread(NULL, 0, ThreadComandos, &dados, CREATE_SUSPENDED, NULL);
-    Threads[1] = CreateThread(NULL, 0, ThreadMoveAgua, &dados, CREATE_SUSPENDED, NULL);
+    dados.Threads[0] = CreateThread(NULL, 0, ThreadComandos, &dados, CREATE_SUSPENDED, NULL);
+    dados.Threads[1] = CreateThread(NULL, 0, ThreadMoveAgua, &dados, CREATE_SUSPENDED, NULL);
+    dados.Threads[3] = CreateThread(NULL, 0, ThreadComandosServer, &dados, 0, NULL);
+    HANDLE hThreadTerminarTudo = CreateThread(NULL, 0, ThreadTerminar, &dados, 0, NULL);
+    if (hThreadTerminarTudo == NULL) {
+        _tprintf(TEXT("Não foi possível iniciar thread terminar tudo"));
+        return -1;
+    }
     //ThreadPipes = CreateThread(NULL, 0, ThreadComsPipes, &dadosThreadCliente, 0, NULL);
     //lancamos a thread
-    if (Threads[0] != NULL && Threads[1] != NULL) {
-        _tprintf(_T("--- Digite comecar para iniciar o jogo !! ---\n"));
-        while (1) {
-            _fgetts(comando, 100, stdin);
-            if (_tcscmp(comando, _T("comecar\n")) == 0) {
-                ResumeThread(Threads[0]);
-                ResumeThread(Threads[1]);
+    if (dados.Threads[0] != NULL && dados.Threads[1] != NULL) {
+               
                 while (numClientes < 2) {
                     //permite estar bloqueado , à espera que 1 evento do array de enventos seja assinalado
                     offset = WaitForMultipleObjects(2, dados.pipes.hEvent, FALSE, INFINITE);
@@ -738,8 +1017,9 @@ int _tmain(int argc, TCHAR* argv[])
                     // se é um indice válido ...
                     if (i >= 0 && i < 2) {
                         if (!firstTime) {
-                            _tprintf(TEXT("[SERVIDOR] ENTREI LA DENTRO\n"));
-                            Threads[2] = CreateThread(NULL, 0, ThreadServerClient, &dados, 0, NULL);
+                            dados.Threads[2] = CreateThread(NULL, 0, ThreadServerClient, &dados, 0, NULL);
+                            ResumeThread(dados.Threads[0]);
+                           
                             firstTime = TRUE;
                         }
                         _tprintf(TEXT("[ESCRITOR] Leitor %d chegou\n"), i);
@@ -756,16 +1036,8 @@ int _tmain(int argc, TCHAR* argv[])
                             numClientes++;
                         }
                     }
-                }
-                break;
-            }
-            else {
-                _tprintf(_T("--- Comando inválido, digite comecar ---\n"));
-            }
-
-        }
-
-        WaitForMultipleObjects(3, Threads, TRUE, INFINITE);
+                }     
+        WaitForMultipleObjects(4, dados.Threads, TRUE, INFINITE);
     }
     for (int i = 0; i < 2; i++) {
         _tprintf(TEXT("[ESCRITOR] Desligar o pipe (DisconnectNamedPipe)\n"));
@@ -777,6 +1049,7 @@ int _tmain(int argc, TCHAR* argv[])
     }
     UnmapViewOfFile(dados.memPar);
     CloseHandle(hFileMap);
+    
     CloseHandle(dados.hSemEscrita);
     CloseHandle(dados.hSemLeitura);
     CloseHandle(dados.hEventoMapa);

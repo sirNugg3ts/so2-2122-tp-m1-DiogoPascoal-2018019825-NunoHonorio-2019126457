@@ -5,13 +5,13 @@
 
 #include <Windows.h>
 
-#define TAM_BUFFER 10
+#define TAM_BUFFER 100
 #define MAX_CLIENTS 2
 
 //Tabuleiro do jogo
 typedef struct {
     int tam;
-    TCHAR tab[20][20]; /// alterar para dinamico
+    TCHAR tab[20][20];
     int startCel;
     int destCel;
     int agua;
@@ -31,9 +31,15 @@ typedef struct {
 //Cliente -> Servidor AKA Resposta
 typedef struct {
     TCHAR nome[256];
+    int nivel;
+    int score;
+    int win;
+
     int modojogo;
     int colunaJogada; // coluna carregada
     int linhaJogada; // linha carregada
+    TCHAR tubo;
+    BOOL jogada;
 }infoCliente;
 
 typedef struct PipeInfo {
@@ -58,14 +64,13 @@ typedef struct NAMEDPIPE_STRUCT {
 //representa uma celula no buffer
 typedef struct {
     int id;
-    TCHAR comando[3][20];
+    TCHAR comando[3][100];
 }CelulaBuffer;
 
 //representa a nossa memoria partilhada
 typedef struct {
     int posE;
     int posL;
-   
     int win;
     Tabuleiro tabMem;
     CelulaBuffer buffer[TAM_BUFFER];
@@ -82,9 +87,17 @@ typedef struct {
     HANDLE hSemLeitura; //handle para o semaforo que controla as leituras (controla quantas posicoes estao preenchidas)
     HANDLE hMutex;
     HANDLE hEventoMapa;
+    HANDLE hEventoTerminar;
+    HANDLE Threads[4];
+    TCHAR comando[20];
     NAMEDPIPE_STRUCT pipes;
+    infoCliente* jogador;
     int terminar; // 1 para sair, 0 em caso contrário
     int id;
+    int terminarMonitor;
+    int terminarComandosServidor;
+    int terminarAgua;
+    int terminarClientes;
 }DadosThreads;
 
 

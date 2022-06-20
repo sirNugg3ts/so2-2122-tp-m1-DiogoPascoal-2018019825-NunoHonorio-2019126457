@@ -14,11 +14,12 @@
 #include <conio.h>
 #define MENU_EXIT 1
 #define MENU_STOP 2
-#define MENU_BLOCK 3
-#define HELP_RULES 4
-#define BUTTON_MOD1 5
-#define BUTTON_MOD2 6
-#define BUTTON_START 7
+#define MENU_CHANGE_THEME 3
+#define MENU_BLOCK 4
+#define HELP_RULES 5
+#define BUTTON_MOD1 6
+#define BUTTON_MOD2 7
+#define BUTTON_START 8
 //include "..//Servidor//comunicacao.h"
 /* ===================================================== */
 /* Programa base (esqueleto) para aplicações Windows     */
@@ -33,10 +34,23 @@
 //			1) É chamada pelo Windows (callback) 
 //			2) Executa código em função da mensagem recebida
 
-static infoServidor server;
-static infoCliente cliente;
-
+infoServidor server;
+infoCliente cliente;
+HWND hWnd;
+HDC hdc;
+HDC bmpDC;
 LRESULT CALLBACK TrataEventos(HWND, UINT, WPARAM, LPARAM);
+
+void WINAPI terminarTudo(LPVOID lpData) {
+    DADOS_THREAD_ATUALIZA_TABULEIRO* dados = (DADOS_THREAD_ATUALIZA_TABULEIRO*)lpData;
+    HANDLE hEventoTermianr = OpenEvent(EVENT_ALL_ACCESS, FALSE, TEXT("SO2_TERMINAR_TUDO"));
+    WaitForSingleObject(hEventoTermianr, INFINITE);
+    dados->terminar = 1;
+    
+    DestroyWindow(hWnd);
+    exit(1);
+    return;
+}
 
 DWORD WINAPI leResposta(LPVOID lpData) {
     DADOS_THREAD_ATUALIZA_TABULEIRO* dados = (DADOS_THREAD_ATUALIZA_TABULEIRO*)lpData;
@@ -55,7 +69,7 @@ DWORD WINAPI leResposta(LPVOID lpData) {
 
     do {
         WaitForSingleObject(hEventoMapa, INFINITE);
-
+        cliente.jogada = 0;
         ZeroMemory(&ov, sizeof(ov));
         ov.hEvent = hEvento;
         fSuccess = WriteFile(
@@ -67,7 +81,7 @@ DWORD WINAPI leResposta(LPVOID lpData) {
 
         WaitForSingleObject(ov.hEvent, INFINITE);
         GetOverlappedResult(dados->hPipe, &ov, &dwLidos, FALSE);
-
+        
         ZeroMemory(&ov, sizeof(ov));
         ov.hEvent = hEvento;
          fSuccess = ReadFile(
@@ -81,7 +95,7 @@ DWORD WINAPI leResposta(LPVOID lpData) {
         GetOverlappedResult(dados->hPipe, &ov, &dwLidos, FALSE);
         Sleep(1000);
         InvalidateRect(dados->hWnd, NULL, TRUE); // requisita WM_PAINT 
-    } while (1);
+    } while (!dados->terminar);
     return 0;
 }
 
@@ -109,7 +123,7 @@ static HANDLE hPipe;
 int WINAPI _tWinMain(HINSTANCE hInst, // instancia atual app
     HINSTANCE hPrevInst,//
     LPSTR lpCmdLine, int nCmdShow) {
-    HWND hWnd;		// hWnd é o handler da janela, gerado mais abaixo por CreateWindow()
+    		// hWnd é o handler da janela, gerado mais abaixo por CreateWindow()
     MSG lpMsg;		// MSG é uma estrutura definida no Windows para as mensagens
     WNDCLASSEX wcApp;	// WNDCLASSEX é uma estrutura cujos membros servem para 
               // definir as características da classe da janela
@@ -234,7 +248,12 @@ int WINAPI _tWinMain(HINSTANCE hInst, // instancia atual app
     DADOS_THREAD_ATUALIZA_TABULEIRO dados;
     dados.hPipe = hPipe;
     dados.hWnd = hWnd;
+    dados.terminar = 0;
     hThreadReads = CreateThread(NULL, 0, leResposta, &dados , 0, &dwTid);
+    if (hThreadReads == NULL) {
+        return -1;
+    }
+    HANDLE threadTermina = CreateThread(NULL, 0, terminarTudo, &dados, 0, NULL);
     if (hThreadReads == NULL) {
         return -1;
     }
@@ -325,16 +344,15 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     static int xBitmap;
     static int yBitmap;
     static HBITMAP hBmp;
-    HDC hdc;
-    static HDC bmpDC;
+    
     static HDC memDC = NULL;
     static TCHAR lpvMessage[256] = TEXT("Default message from client.");
     static BOOL   fSuccess = FALSE, start = FALSE;
     static DWORD  cbRead, cbToWrite, cbWritten, dwMode;
     static TCHAR cbS[256];
-    static TCHAR queue[6];
     static int next = 0;
     int updateQueue = 0;
+    static BOOL theme = FALSE;
  
     DWORD nBytes;
     static BOOL jogada = FALSE;
@@ -352,21 +370,31 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     switch (messg) {
     case WM_CREATE:
     {
+       
         
-        //if (!initCreate(hWnd, &hPipe, &hThread, lpvMessage, &dwMode, &cbToWrite, &cbWritten, &td)) {
-        //    MessageBox(hWnd, _T("ERRO NO INITCREATE"), _T("Sair"), MB_ICONQUESTION | MB_YESNO | MB_HELP);
-        //    return -1;
-       // }
-        
+        //CANOS SEM AGUA
+        hCano2 = (HBITMAP)LoadImage(NULL, _T("6.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCano3 = (HBITMAP)LoadImage(NULL, _T("2.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCano4 = (HBITMAP)LoadImage(NULL, _T("1.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCano5 = (HBITMAP)LoadImage(NULL, _T("3.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCano6 = (HBITMAP)LoadImage(NULL, _T("4.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCano1 = (HBITMAP)LoadImage(NULL, _T("5.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCanoT = (HBITMAP)LoadImage(NULL, _T("T.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCantoTI = (HBITMAP)LoadImage(NULL, _T("Tinverso.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hBloco = (HBITMAP)LoadImage(NULL, _T("17.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        //CANOS COM AGUA
+        hCanoA2 = (HBITMAP)LoadImage(NULL, _T("12.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCanoA3 = (HBITMAP)LoadImage(NULL, _T("8.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCanoA4 = (HBITMAP)LoadImage(NULL, _T("7.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCanoA5 = (HBITMAP)LoadImage(NULL, _T("9.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCanoA6 = (HBITMAP)LoadImage(NULL, _T("10.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCanoA1 = (HBITMAP)LoadImage(NULL, _T("11.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCanoAT = (HBITMAP)LoadImage(NULL, _T("TAgua.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        hCanoATI = (HBITMAP)LoadImage(NULL, _T("TInversoAgua.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+        cliente.nivel = 0;
+        cliente.score = 0;
         hdc = GetDC(hWnd);
         bmpDC = CreateCompatibleDC(hdc);
-        queue[0] = _T('═');
-        queue[1] = _T('║');
-        queue[2] = _T('╔');
-        queue[3] = _T('╗');
-        queue[4] = _T('╝');
-        queue[5] = _T('╚');
-        
         addMenu(hWnd);
         addControls(hWnd); 
         break;
@@ -374,6 +402,55 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     case WM_COMMAND:
     {
         switch (wParam) {
+            case MENU_CHANGE_THEME:
+                theme = !theme;
+            if(theme){
+                //CANOS SEM AGUA
+            hCano2 = (HBITMAP)LoadImage(NULL, _T("6p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCano3 = (HBITMAP)LoadImage(NULL, _T("2p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCano4 = (HBITMAP)LoadImage(NULL, _T("1p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCano5 = (HBITMAP)LoadImage(NULL, _T("3p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCano6 = (HBITMAP)LoadImage(NULL, _T("4p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCano1 = (HBITMAP)LoadImage(NULL, _T("5p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoT = (HBITMAP)LoadImage(NULL, _T("Tp.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCantoTI = (HBITMAP)LoadImage(NULL, _T("Tinversop.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hBloco = (HBITMAP)LoadImage(NULL, _T("17p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            //CANOS COM AGUA
+            hCanoA2 = (HBITMAP)LoadImage(NULL, _T("12p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoA3 = (HBITMAP)LoadImage(NULL, _T("8p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoA4 = (HBITMAP)LoadImage(NULL, _T("7p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoA5 = (HBITMAP)LoadImage(NULL, _T("9p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoA6 = (HBITMAP)LoadImage(NULL, _T("10p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoA1 = (HBITMAP)LoadImage(NULL, _T("11p.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoAT = (HBITMAP)LoadImage(NULL, _T("TAguap.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoATI = (HBITMAP)LoadImage(NULL, _T("TInversoAguap.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            }
+            else{
+            //CANOS SEM AGUA
+            hCano2 = (HBITMAP)LoadImage(NULL, _T("6.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCano3 = (HBITMAP)LoadImage(NULL, _T("2.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCano4 = (HBITMAP)LoadImage(NULL, _T("1.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCano5 = (HBITMAP)LoadImage(NULL, _T("3.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCano6 = (HBITMAP)LoadImage(NULL, _T("4.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCano1 = (HBITMAP)LoadImage(NULL, _T("5.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoT = (HBITMAP)LoadImage(NULL, _T("T.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCantoTI = (HBITMAP)LoadImage(NULL, _T("Tinverso.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hBloco = (HBITMAP)LoadImage(NULL, _T("17.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            //CANOS COM AGUA
+            hCanoA2 = (HBITMAP)LoadImage(NULL, _T("12.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoA3 = (HBITMAP)LoadImage(NULL, _T("8.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoA4 = (HBITMAP)LoadImage(NULL, _T("7.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoA5 = (HBITMAP)LoadImage(NULL, _T("9.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoA6 = (HBITMAP)LoadImage(NULL, _T("10.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoA1 = (HBITMAP)LoadImage(NULL, _T("11.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoAT = (HBITMAP)LoadImage(NULL, _T("TAgua.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            hCanoATI = (HBITMAP)LoadImage(NULL, _T("TInversoAgua.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+            }
+                 
+                
+            InvalidateRect(hWnd, NULL, TRUE); // requisita WM_PAINT 
+            
+            break;
             case MENU_EXIT:
                 DestroyWindow(hWnd);
                 break;
@@ -409,7 +486,6 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                     return -1;
                 }
                 MessageBox(hWnd, TEXT("Ligação com sucesso \n"), _T("Erro"), MB_OK);
-
                 //
                 InvalidateRect(hWnd, NULL, FALSE);
                 break;
@@ -435,7 +511,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                     &cliente,             // message 
                     sizeof(infoCliente),              // message length 
                     &nBytes,             // bytes written 
-                    &ov);                  // not overlapped 
+                    &ov);                  // overlapped 
 
                 WaitForSingleObject(ov.hEvent, INFINITE);
                 GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
@@ -478,13 +554,100 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
     }
     case WM_LBUTTONDOWN: // <-BOTAO ESQUERDO, BOTADO DIREITO -> WM_RBUTTONDOWN
     {
+        if (start ) {
+            int xParam = GET_X_LPARAM(lParam); // (26*tam)+15 -> max || 15-> min   -------- 15
+            int yParam = GET_Y_LPARAM(lParam); // (26*tam)+65 -> max || 65 -> min; -------
+            int x = oX(xParam); // 
+            int y = oY(yParam); // 
+            cliente.linhaJogada = y;
+            cliente.colunaJogada = x;
+            if (xParam > 15 && xParam < (30 * server.infoTab.tam) + 15 && yParam > 65 && yParam < (30 * server.infoTab.tam) + 65 && server.infoTab.tab[y][x]!=_T('━')
+                && server.infoTab.tab[y][x] != _T('┬')
+                && server.infoTab.tab[y][x] != _T('┃')
+                && server.infoTab.tab[y][x] != _T('┏')
+                && server.infoTab.tab[y][x] != _T('┓')
+                && server.infoTab.tab[y][x] != _T('┛')
+                && server.infoTab.tab[y][x] != _T('┗')
+                && server.infoTab.tab[y][x] != _T('┴') 
+                && server.infoTab.tab[y][x] != _T('╩')
+                ) {
+               
+                //xBitmap =  x * 26 + 19;
+                //yBitmap =  y * 26 + 70;
+                
+
+            if (server.infoTab.queue[0] == _T('═')) {  
+                cliente.tubo = _T('═');
+            }
+            else if (server.infoTab.queue[0] == _T('║')) {
+                cliente.tubo = _T('║');
+            }
+            else if (server.infoTab.queue[0] == _T('╔')) {
+                cliente.tubo = _T('╔');
+            }
+            else if (server.infoTab.queue[0] == _T('╗')) {
+                cliente.tubo = _T('╗');
+            }
+            else if (server.infoTab.queue[0] == _T('╝')) {
+                cliente.tubo = _T('╝');
+            }
+            else if (server.infoTab.queue[0] == _T('╚')) {
+                cliente.tubo = _T('╚');
+            }
+            cliente.jogada = 1;
+            fSuccess = FALSE;
+            ZeroMemory(&ov, sizeof(ov));
+            ov.hEvent = hEventOV;
+            fSuccess = WriteFile(
+                hPipe,                  // pipe handle 
+                &cliente,             // message 
+                sizeof(infoCliente),              // message length 
+                &nBytes,             // bytes written 
+                &ov);                  // not overlapped 
+
+            WaitForSingleObject(ov.hEvent, INFINITE);
+            GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
+
+            if (!fSuccess)
+            {
+                MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
+                return -1;
+            }
+            //MessageBox(hWnd, TEXT("COMIA A TUA PRIMA 2 \n"), _T("Erro"), MB_OK);
+            //Ler do servidor
+            ZeroMemory(&ov, sizeof(ov));
+            ov.hEvent = hEventOV;
+            fSuccess = ReadFile(
+                hPipe,    // pipe handle 
+                &server,    // buffer to receive reply 
+                sizeof(infoServidor),  // size of buffer 
+                &nBytes,  // number of bytes read 
+                NULL);    // not overlapped 
+
+            WaitForSingleObject(ov.hEvent, INFINITE);
+            GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
+
+
+            if (!fSuccess)
+            {
+                MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
+                return -1;
+            }        
+            cliente.jogada = 0;
+            InvalidateRect(hWnd, NULL,  TRUE); // requisita WM_PAINT
+           }
+        }     
+        break;
+    }case WM_RBUTTONDOWN:
+    {
         if (start) {
             int xParam = GET_X_LPARAM(lParam); // (26*tam)+15 -> max || 15-> min   -------- 15
             int yParam = GET_Y_LPARAM(lParam); // (26*tam)+65 -> max || 65 -> min; -------
             int x = oX(xParam); // 
-            int y = (oY(yParam)); // 
-            
-            if (xParam > 15 && xParam < (26 * server.infoTab.tam) + 15 && yParam > 65 && yParam < (26 * server.infoTab.tam) + 65 && server.infoTab.tab[y][x]!=_T('━')
+            int y = oY(yParam); // 
+            cliente.linhaJogada = y;
+            cliente.colunaJogada = x;
+            if (xParam > 15 && xParam < (26 * server.infoTab.tam) + 15 && yParam > 65 && yParam < (26 * server.infoTab.tam) + 65 && server.infoTab.tab[y][x] != _T('━')
                 && server.infoTab.tab[y][x] != _T('┬')
                 && server.infoTab.tab[y][x] != _T('┃')
                 && server.infoTab.tab[y][x] != _T('┏')
@@ -494,68 +657,48 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                 && server.infoTab.tab[y][x] != _T('┴')
                 && server.infoTab.tab[y][x] != _T('╩')
                 ) {
-               
-                xBitmap =  x * 26 + 19;
-                yBitmap =  y * 26 + 70;
-                //CANOS SEM AGUA
-                hCano2 = (HBITMAP)LoadImage(NULL, _T("6.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCano3 = (HBITMAP)LoadImage(NULL, _T("2.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCano4 = (HBITMAP)LoadImage(NULL, _T("1.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCano5 = (HBITMAP)LoadImage(NULL, _T("3.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCano6 = (HBITMAP)LoadImage(NULL, _T("4.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCano1 = (HBITMAP)LoadImage(NULL, _T("5.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCanoT = (HBITMAP)LoadImage(NULL, _T("T.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCantoTI = (HBITMAP)LoadImage(NULL, _T("Tinverso.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hBloco = (HBITMAP)LoadImage(NULL, _T("17.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
+                cliente.jogada = 2;
+                fSuccess = FALSE;
+                ZeroMemory(&ov, sizeof(ov));
+                ov.hEvent = hEventOV;
+                fSuccess = WriteFile(
+                    hPipe,                  // pipe handle 
+                    &cliente,             // message 
+                    sizeof(infoCliente),              // message length 
+                    &nBytes,             // bytes written 
+                    &ov);                  // not overlapped 
 
+                WaitForSingleObject(ov.hEvent, INFINITE);
+                GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
 
+                if (!fSuccess)
+                {
+                    MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
+                    return -1;
+                }
+                //MessageBox(hWnd, TEXT("COMIA A TUA PRIMA 2 \n"), _T("Erro"), MB_OK);
+                //Ler do servidor
+                ZeroMemory(&ov, sizeof(ov));
+                ov.hEvent = hEventOV;
+                fSuccess = ReadFile(
+                    hPipe,    // pipe handle 
+                    &server,    // buffer to receive reply 
+                    sizeof(infoServidor),  // size of buffer 
+                    &nBytes,  // number of bytes read 
+                    NULL);    // not overlapped 
 
-                //CANOS COM AGUA
-                hCanoA2 = (HBITMAP)LoadImage(NULL, _T("12.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCanoA3 = (HBITMAP)LoadImage(NULL, _T("8.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCanoA4 = (HBITMAP)LoadImage(NULL, _T("7.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCanoA5 = (HBITMAP)LoadImage(NULL, _T("9.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCanoA6 = (HBITMAP)LoadImage(NULL, _T("10.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCanoA1 = (HBITMAP)LoadImage(NULL, _T("11.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCanoAT = (HBITMAP)LoadImage(NULL, _T("TAgua.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-                hCanoATI = (HBITMAP)LoadImage(NULL, _T("TInversoAgua.bmp"), IMAGE_BITMAP, 18, 18, LR_LOADFROMFILE);
-
-            if (server.infoTab.queue[0] == _T('═')) {  
-                GetObject(hCano1, sizeof(bmp), &bmp);
-                SelectObject(bmpDC, hCano1);
+                WaitForSingleObject(ov.hEvent, INFINITE);
+                GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
+                if (!fSuccess)
+                {
+                    MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
+                    return -1;
+                }
+                cliente.jogada = 0;
+                InvalidateRect(hWnd, NULL, TRUE); // requisita WM_PAINT
             }
-            else if (server.infoTab.queue[0] == _T('║')) {
-                GetObject(hCano2, sizeof(bmp), &bmp);
-                SelectObject(bmpDC, hCano2);
-            }
-            else if (server.infoTab.queue[0] == _T('╔')) {
-                GetObject(hCano3, sizeof(bmp), &bmp);
-                SelectObject(bmpDC, hCano3);
-            }
-            else if (server.infoTab.queue[0] == _T('╗')) {
-                GetObject(hCano4, sizeof(bmp), &bmp);
-                SelectObject(bmpDC, hCano4);
-            }
-            else if (server.infoTab.queue[0] == _T('╝')) {
-                GetObject(hCano5, sizeof(bmp), &bmp);
-                SelectObject(bmpDC, hCano5);
-            }
-            else if (server.infoTab.queue[0] == _T('╚')) {
-                GetObject(hCano6, sizeof(bmp), &bmp);
-                SelectObject(bmpDC, hCano6);
-            }
-            InvalidateRect(hWnd, NULL,  TRUE); // requisita WM_PAINT
-           }
         }
-        
-        
         break;
-    }case WM_RBUTTONDOWN:
-    {
-        xBitmap = GET_X_LPARAM(lParam);
-        yBitmap = GET_Y_LPARAM(lParam);
-        
-        
         
     }
     case WM_CLOSE:
@@ -574,30 +717,6 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
         SetBkMode(hdc, TRANSPARENT);
         if (aux == 1) {
 
-            ZeroMemory(&ov, sizeof(ov));
-            ov.hEvent = hEventOV;
-            fSuccess = WriteFile(
-                hPipe,                  // pipe handle 
-                &cliente,             // message 
-                sizeof(infoCliente),              // message length 
-                &nBytes,             // bytes written 
-                &ov);                  // not overlapped 
-
-            WaitForSingleObject(ov.hEvent, INFINITE);
-            GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
-
-            ZeroMemory(&ov, sizeof(ov));
-            ov.hEvent = hEventOV;
-            fSuccess = ReadFile(
-                hPipe,    // pipe handle 
-                &server,    // buffer to receive reply 
-                sizeof(infoServidor),  // size of buffer 
-                &nBytes,  // number of bytes read 
-                NULL);    // not overlapped 
-
-            WaitForSingleObject(ov.hEvent, INFINITE);
-            GetOverlappedResult(hPipe, &ov, &nBytes, FALSE);
-
             if (!fSuccess)
             {
                 MessageBox(hWnd, TEXT("ReadFile from pipe failed. GLE=%d\n"), GetLastError(), _T("Erro"), MB_OK);
@@ -605,22 +724,22 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
             }
            
             int i = 0, j;
-            int Lx1 = 15, Lx2 = 41;
-            int Cy1 = 65, Cy2 = 91;
+            int Lx1 = 15, Lx2 = 45;
+            int Cy1 = 65, Cy2 = 95;
             for (j = 0; j < server.infoTab.tam; j++) {
                 for (i = 0; i < server.infoTab.tam; i++) {
                     Rectangle(hdc, Lx1, Cy1, Lx2, Cy2);
                     Lx1 = Lx2;
-                    Lx2 = Lx2 + 26;
+                    Lx2 = Lx2 + 30;
                 }
                 Cy1 = Cy2;
-                Cy2 = Cy2 + 26;
-                Lx1 = 15, Lx2 = 41;
+                Cy2 = Cy2 + 30;
+                Lx1 = 15, Lx2 = 45;
                 
             }
            Rectangle(hdc, 600, 125, 700, 450);
             
-           BitBlt(hdc, xBitmap, yBitmap, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
+          // BitBlt(hdc, xBitmap, yBitmap, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
            
            //pintar queue
            BOOL existeCano = FALSE;
@@ -660,8 +779,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                    if(queueCano){
                         BitBlt(hdc, 640, 100 + next, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
                         queueCano = FALSE;
-                   }
-                    
+                   }   
                }    
 
             //pintar tabuleiro
@@ -745,7 +863,7 @@ LRESULT CALLBACK TrataEventos(HWND hWnd, UINT messg, WPARAM wParam, LPARAM lPara
                            SelectObject(bmpDC, hCanoATI);
                        }
                        if (existeCano) {
-                           BitBlt(hdc, (26 * j) + 15, (26 * i) + 65, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
+                           BitBlt(hdc, (30 * j) + 17, (30 * i) + 67, bmp.bmWidth, bmp.bmHeight, bmpDC, 0, 0, SRCCOPY);
                            existeCano = FALSE;
                        }
                        
@@ -783,6 +901,7 @@ void addMenu(HWND hWnd) {
     HMENU hMenu = CreateMenu();
     HMENU hFileMenu = CreateMenu();
     HMENU hHelp = CreateMenu();
+    AppendMenu(hFileMenu, MF_STRING, MENU_CHANGE_THEME, _T("Mudar Tema"));
     AppendMenu(hFileMenu, MF_STRING, MENU_EXIT, _T("Exit"));
     AppendMenu(hHelp, MF_STRING, HELP_RULES, _T("Rules"));
     AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hFileMenu , _T("Menu"));
@@ -792,14 +911,14 @@ void addMenu(HWND hWnd) {
 int oX(int x) {
     x = x - 15;
     int oX;
-    oX = x / 26;
+    oX = x / 30;
     return oX;
 }
 
 int oY(int y) {
-    y = y - 55;
+    y = y - 65;
     int oY;
-    oY = y / 26;
+    oY = y / 30;
     return oY;
 }
 void addControls(HWND hWnd) {
@@ -813,7 +932,3 @@ void addControls(HWND hWnd) {
 void addGameControls(HWND hWnd) {
     hMenu = CreateWindow(L"static", _T("Próximas peças"), WS_VISIBLE | WS_CHILD | SS_CENTER | ES_AUTOHSCROLL | WS_BORDER, 500, 65, 210, 400, hWnd, NULL, NULL, NULL);   
 }
-
-
-
-

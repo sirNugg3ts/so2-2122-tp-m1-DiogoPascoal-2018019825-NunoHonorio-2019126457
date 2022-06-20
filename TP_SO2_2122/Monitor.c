@@ -7,7 +7,16 @@
 #include <io.h>
 #include "Monitor.h"
 
+void WINAPI terminarTudo(LPVOID lpData) {
+    
+    HANDLE hEventoTermianr = OpenEvent(EVENT_ALL_ACCESS, FALSE, TEXT("SO2_TERMINAR_TUDO"));
+    WaitForSingleObject(hEventoTermianr, INFINITE);
+  
 
+   
+    exit(1);
+    return;
+}
 
 void showmap(Tabuleiro* tab) {
     for (int c = 0; c < tab->tam + 2; c++) {
@@ -52,16 +61,16 @@ void showmap(Tabuleiro* tab) {
 
 void pedirComando(CelulaBuffer* buffer, int tam) {
     TCHAR* token=NULL;
-    TCHAR comando[100], comandos[3][20], proxComando[100];
+    TCHAR comando[100], comandos[3][100], proxComando[100];
     int n;
     while (1) {
         n = 0;
-        _fgetts(comando, 20, stdin);
+        _fgetts(comando, 100, stdin);
         token = _tcstok_s(comando, _T(" ,\t\n"), &proxComando);
 
         while (token != NULL) {
             if (token != NULL) {
-                _tcscpy_s(comandos[n], 20, token);
+                _tcscpy_s(comandos[n], 100, token);
                 token = _tcstok_s(NULL, _T(" ,\t\n"), &proxComando);
                 n++;
             }
@@ -97,7 +106,7 @@ void pedirComando(CelulaBuffer* buffer, int tam) {
         }
     }
     for (int i = 0; i < n; i++) {
-        _tcscpy_s(buffer->comando[i], 20, comandos[i]);
+        _tcscpy_s(buffer->comando[i], 100, comandos[i]);
     }
 }
 
@@ -171,6 +180,11 @@ int _tmain(int argc, TCHAR* argv[])
     _setmode(_fileno(stdout), _O_WTEXT);
     _setmode(_fileno(stderr), _O_WTEXT);
 #endif
+
+    HANDLE threadTermina = CreateThread(NULL, 0, terminarTudo, &dados, 0, NULL);
+    if (threadTermina == NULL) {
+        return -1;
+    }
     
     dados.hSemEscrita = OpenSemaphore(SEMAPHORE_ALL_ACCESS, TRUE, TEXT("SO2_SEMAFORO_ESCRITA"));
 

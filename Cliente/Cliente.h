@@ -8,6 +8,7 @@
 typedef struct {
     HANDLE hPipe;
     HANDLE hWnd;
+    int terminar;
 }DADOS_THREAD_ATUALIZA_TABULEIRO;
 
 typedef struct {
@@ -43,9 +44,15 @@ typedef struct {
 //Cliente -> Servidor AKA Resposta
 typedef struct {
     TCHAR nome[256];
+    int nivel;
+    int score;
+    int win;
+
     int modojogo;
     int colunaJogada; // coluna carregada
     int linhaJogada; // linha carregada
+    TCHAR tubo;
+    BOOL jogada;
 }infoCliente;
 
 #endif

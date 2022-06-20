@@ -1,6 +1,6 @@
 #include <Windows.h>
 
-#define TAM_BUFFER 10
+#define TAM_BUFFER 100
 
 #define TAM 200
 #define MAX_TAM_MAPA 20
@@ -8,6 +8,20 @@
 #define SEM_READ_NAME TEXT("SEM_READ")
 #define MUTEX_NAME TEXT("MUTEX")
 #define SHM_NAME TEXT("SMH_PC")
+
+typedef struct PipeInfo {
+    HANDLE hPipes;
+    OVERLAPPED overlap;
+    BOOL active;
+}PipeInfo;
+
+typedef struct NAMEDPIPE_STRUCT {
+    // handle do pipe
+    PipeInfo pipeInfo[2];
+    HANDLE hEvent[2];
+    HANDLE hMutex[2];
+}NAMEDPIPE_STRUCT;
+
 typedef struct {
     int tam;
     TCHAR tab[20][20];
@@ -22,7 +36,7 @@ typedef struct {
 //representa o uma celula no buffer
 typedef struct {
     int id;
-    TCHAR comando[3][20];
+    TCHAR comando[3][100];
 }CelulaBuffer;
 
 //representa a nossa memoria partilhada
@@ -44,6 +58,9 @@ typedef struct {
     HANDLE hSemLeitura; //handle para o semaforo que controla as leituras (controla quantas posicoes estao preenchidas)
     HANDLE hMutex;
     HANDLE hEventoMapa;
+    HANDLE Threads[4];
+    TCHAR comando[10];
+    NAMEDPIPE_STRUCT pipes;
     int terminar; // 1 para sair, 0 em caso contrário
     int id;
 }DadosThreads;
